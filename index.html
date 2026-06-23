@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="es-MX">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <title>AUTOPARTES VENCES | Catálogo digital de autopartes</title>
+  <meta name="description" content="Catálogo digital de AUTOPARTES VENCES. Busca autopartes por marca, modelo, año o pieza y cotiza directo por WhatsApp." />
+  <meta name="google-site-verification" content="NnQtIlIwbBbwkulIv1HM9y_Sw0bRdRFb0nWIsxOfPuE" />
+
+  <link rel="stylesheet" href="style-pro-v7.css?v=7" />
+</head>
+
+<body>
+  <div class="top-line">
+    <span>Autopartes disponibles · Fotos reales · Cotización directa</span>
+    <a href="https://wa.me/525632753982?text=Hola%20Autopartes%20Vences%2C%20quiero%20cotizar%20una%20autoparte" target="_blank" rel="noopener">
+      WhatsApp: +52 563 275 3982
+    </a>
+  </div>
+
+  <header class="site-header" id="inicio">
+    <nav class="navbar">
+      <a class="brand" href="#inicio" aria-label="Autopartes Vences inicio">
+        <span class="logo-shell">
+          <img src="imagenes/logo-vences.jpeg" alt="Logo Autopartes Vences" onerror="this.onerror=null;this.style.display='none';document.querySelector('.logo-fallback').style.display='grid';" />
+          <span class="logo-fallback">AV</span>
+        </span>
+        <span class="brand-copy">
+          <strong>AUTOPARTES</strong>
+          <small>VENCES</small>
+        </span>
+      </a>
+
+      <button class="menu-toggle" id="menuToggle" aria-label="Abrir menú">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+
+      <div class="nav-links" id="navLinks">
+        <a href="#catalogo">Catálogo</a>
+        <a href="#ventajas">Ventajas</a>
+        <a href="#como-comprar">Cómo comprar</a>
+        <a class="nav-cta" href="https://wa.me/525632753982?text=Hola%20Autopartes%20Vences%2C%20quiero%20cotizar%20una%20autoparte" target="_blank" rel="noopener">
+          Cotizar
+        </a>
+      </div>
+    </nav>
+
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">Catálogo digital de autopartes</p>
+        <h1>Encuentra la pieza correcta sin perder tiempo.</h1>
+        <p class="hero-subtitle">
+          Busca autopartes por marca, modelo, año o nombre de pieza. Revisa fotos reales, confirma disponibilidad y cotiza directo por WhatsApp.
+        </p>
+
+        <div class="hero-actions">
+          <a href="#catalogo" class="btn btn-primary">Explorar inventario</a>
+          <button id="compartirCatalogo" class="btn btn-secondary" type="button">Compartir catálogo</button>
+        </div>
+
+        <div class="hero-stats">
+          <div>
+            <strong id="statTotal">0</strong>
+            <span>Piezas publicadas</span>
+          </div>
+          <div>
+            <strong id="statMarcas">0</strong>
+            <span>Marcas disponibles</span>
+          </div>
+          <div>
+            <strong id="statFotos">0</strong>
+            <span>Fotos principales</span>
+          </div>
+        </div>
+      </div>
+
+      <aside class="hero-panel">
+        <div class="scanner-line"></div>
+        <span class="panel-label">Búsqueda rápida</span>
+        <h2>Encuentra tu pieza rápido</h2>
+        <p>Filtra por marca, modelo y año para encontrar piezas compatibles sin dar mil vueltas.</p>
+        <div class="panel-list">
+          <div><strong>Fotos reales</strong><span>Toca la imagen y revisa más fotos de la pieza</span></div>
+          <div><strong>Cotización directa</strong><span>El mensaje se prepara con la pieza que viste</span></div>
+          <div><strong>Atención rápida</strong><span>Sin formularios ni vueltas, directo por WhatsApp</span></div>
+        </div>
+      </aside>
+    </section>
+  </header>
+
+  <main>
+    <section class="section search-section" id="catalogo">
+      <div class="section-heading">
+        <p class="eyebrow">Autopartes disponibles</p>
+        <h2>Encuentra tu autoparte</h2>
+        <p>Escribe una pieza o usa los filtros. Ejemplos: <strong>faro Honda City</strong>, <strong>calavera HR-V</strong>, <strong>rin Duster 2016</strong>.</p>
+      </div>
+
+      <form class="finder" id="finderForm" autocomplete="off">
+        <label class="finder-search">
+          Buscar
+          <input type="search" id="busqueda" placeholder="Faro, calavera, puerta, rin, Sentra..." />
+        </label>
+
+        <label>
+          Marca
+          <select id="filtroMarca">
+            <option value="">Todas</option>
+          </select>
+        </label>
+
+        <label>
+          Modelo
+          <select id="filtroModelo">
+            <option value="">Todos</option>
+          </select>
+        </label>
+
+        <label>
+          Año
+          <select id="filtroAnio">
+            <option value="">Todos</option>
+          </select>
+        </label>
+
+        <button type="button" id="limpiarFiltros" class="btn btn-primary">Limpiar</button>
+      </form>
+
+      <div class="catalog-toolbar">
+        <p id="contador">Cargando inventario...</p>
+
+        <div class="toolbar-actions">
+          <button type="button" class="chip active" data-pieza="">Todo</button>
+          <button type="button" class="chip" data-pieza="FARO">Faros</button>
+          <button type="button" class="chip" data-pieza="CALAVERA">Calaveras</button>
+          <button type="button" class="chip" data-pieza="PUERTA">Puertas</button>
+          <button type="button" class="chip" data-pieza="RIN">Rines</button>
+        </div>
+      </div>
+
+      <div class="productos catalog-grid" id="productos"></div>
+
+      <div class="empty-state" id="mensajeVacio" hidden>
+        <h3>No apareció esa pieza todavía.</h3>
+        <p>Escríbenos por WhatsApp con marca, modelo, año y la pieza que necesitas. Puede estar en inventario aunque todavía no salga filtrada.</p>
+        <a class="btn btn-primary" href="https://wa.me/525632753982?text=Hola%20Autopartes%20Vences%2C%20busco%20una%20pieza%20que%20no%20aparece%20en%20el%20cat%C3%A1logo" target="_blank" rel="noopener">
+          Preguntar por WhatsApp
+        </a>
+      </div>
+    </section>
+
+    <section class="section trust-strip" id="ventajas">
+      <article>
+        <span>01</span>
+        <h3>Inventario actualizado</h3>
+        <p>Consulta piezas disponibles con información clara y lista para cotizar.</p>
+      </article>
+
+      <article>
+        <span>02</span>
+        <h3>Fotos reales</h3>
+        <p>Toca la imagen principal para ver más fotos de la pieza.</p>
+      </article>
+
+      <article>
+        <span>03</span>
+        <h3>Búsqueda precisa</h3>
+        <p>Filtra por marca, modelo y año para encontrar opciones compatibles.</p>
+      </article>
+
+      <article>
+        <span>04</span>
+        <h3>Venta más rápida</h3>
+        <p>Cada pieza abre WhatsApp con el mensaje listo para cotizar.</p>
+      </article>
+    </section>
+
+    <section class="section steps" id="como-comprar">
+      <div class="section-heading">
+        <p class="eyebrow">Proceso de compra</p>
+        <h2>Compra fácil y rápido</h2>
+      </div>
+
+      <div class="steps-grid">
+        <article class="step">
+          <span>1</span>
+          <h3>Elige tu pieza</h3>
+          <p>Busca por marca, modelo, año, lado, color o número de parte.</p>
+        </article>
+
+        <article class="step">
+          <span>2</span>
+          <h3>Revisa las fotos</h3>
+          <p>Toca la imagen principal para ver más fotos y detalles de la pieza.</p>
+        </article>
+
+        <article class="step">
+          <span>3</span>
+          <h3>Cotiza por WhatsApp</h3>
+          <p>Envíanos mensaje y confirma disponibilidad al momento.</p>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div>
+      <a class="brand footer-brand" href="#inicio">
+        <span class="logo-shell">
+          <img src="imagenes/logo-vences.jpeg" alt="Logo Autopartes Vences" onerror="this.onerror=null;this.style.display='none';" />
+        </span>
+        <span class="brand-copy">
+          <strong>AUTOPARTES</strong>
+          <small>VENCES</small>
+        </span>
+      </a>
+      <p>Catálogo digital de autopartes disponibles con cotización por WhatsApp.</p>
+    </div>
+
+    <div class="footer-contact">
+      <h3>Contacto</h3>
+      <a href="https://wa.me/525632753982" target="_blank" rel="noopener">WhatsApp: +52 563 275 3982</a>
+      <p>Estado de México, México</p>
+    </div>
+  </footer>
+
+  <a class="floating-whatsapp" href="https://wa.me/525632753982?text=Hola%20Autopartes%20Vences%2C%20quiero%20cotizar%20una%20autoparte" target="_blank" rel="noopener">
+    WhatsApp
+  </a>
+
+  <script src="script-pro-v7.js?v=7"></script>
+</body>
+</html>
