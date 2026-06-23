@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>AUTOPARTES VENCES | Catálogo digital de autopartes</title>
+
+  <meta name="description" content="Catálogo digital de AUTOPARTES VENCES. Busca autopartes por marca, modelo, año o pieza y cotiza directo por WhatsApp.">
+
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+  <div class="top-line">
+    <span>Autopartes originales usadas y seminuevas</span>
+
+    <div class="top-actions">
+      <a href="#catalogo">Ver catálogo</a>
+      <a href="https://wa.me/525632753982?text=Hola,%20quiero%20cotizar%20una%20autoparte" target="_blank">
+        WhatsApp: 56 3275 3982
+      </a>
+    </div>
+  </div>
+
+  <header class="hero">
+    <div class="nav">
+      <a class="brand" href="#">
+        <div class="logo-box">
+          <img src="imagenes/logo-vences.jpeg" alt="Logo Autopartes Vences" onerror="this.onerror=null;this.src='imagenes/logo-vences.png'">
+        </div>
+
+        <div>
+          <h1>AUTOPARTES VENCES</h1>
+          <p>Catálogo digital de refacciones</p>
+        </div>
+      </a>
+
+      <div class="nav-links">
+        <a href="#catalogo">Catálogo</a>
+        <a href="#ventajas">Ventajas</a>
+        <a class="nav-button" href="https://wa.me/525632753982?text=Hola,%20quiero%20cotizar%20una%20autoparte" target="_blank">
+          Cotizar ahora
+        </a>
+      </div>
+    </div>
+
+    <section class="hero-grid">
+      <div class="hero-content">
+        <span class="tag">Inventario real disponible</span>
+
+        <h2>Encuentra la autoparte correcta sin perder tiempo.</h2>
+
+        <p>
+          Busca por marca, modelo, año o nombre de pieza. Revisa fotos reales,
+          disponibilidad y cotiza directo por WhatsApp.
+        </p>
+
+        <div class="hero-actions">
+          <a href="#catalogo" class="primary-btn">Explorar inventario</a>
+          <button id="compartirCatalogo" class="secondary-btn" type="button">
+            Compartir catálogo
+          </button>
+        </div>
+      </div>
+
+      <aside class="hero-panel">
+        <div class="panel-glow"></div>
+
+        <span class="panel-label">Sistema de búsqueda</span>
+
+        <h3>Marca → Modelo → Año</h3>
+
+        <p>Filtra el inventario en segundos y encuentra piezas compatibles para tu vehículo.</p>
+
+        <div class="mini-list">
+          <div>
+            <strong>Fotos reales</strong>
+            <span>Imagen principal y galería en Drive</span>
+          </div>
+
+          <div>
+            <strong>WhatsApp directo</strong>
+            <span>Mensaje automático por pieza</span>
+          </div>
+
+          <div>
+            <strong>Datos claros</strong>
+            <span>Precio, lado, color y estado</span>
+          </div>
+        </div>
+      </aside>
+    </section>
+  </header>
+
+  <section id="ventajas" class="stats">
+    <div>
+      <strong id="statTotal">0</strong>
+      <span>Piezas publicadas</span>
+    </div>
+
+    <div>
+      <strong id="statMarcas">0</strong>
+      <span>Marcas disponibles</span>
+    </div>
+
+    <div>
+      <strong id="statFotos">0</strong>
+      <span>Fotos principales</span>
+    </div>
+
+    <div>
+      <strong>24/7</strong>
+      <span>Consulta por WhatsApp</span>
+    </div>
+  </section>
+
+  <main id="catalogo">
+    <section class="search-card">
+      <div class="search-header">
+        <div class="search-title">
+          <span>CATÁLOGO DIGITAL</span>
+          <h2>Buscar autoparte</h2>
+          <p>Selecciona marca, modelo y año para encontrar piezas disponibles.</p>
+        </div>
+
+        <button id="limpiarFiltros" class="clear-btn" type="button">
+          Limpiar filtros
+        </button>
+      </div>
+
+      <div class="buscador">
+        <input id="busqueda" type="text" placeholder="Buscar pieza, modelo, año, lado o número de parte...">
+
+        <div class="filtros">
+          <select id="filtroMarca">
+            <option value="">Todas las marcas</option>
+          </select>
+
+          <select id="filtroModelo">
+            <option value="">Todos los modelos</option>
+          </select>
+
+          <select id="filtroAnio">
+            <option value="">Todos los años</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="contador" class="contador">Cargando inventario...</div>
+    </section>
+
+    <section class="productos"></section>
+  </main>
+
+  <section class="cta">
+    <div>
+      <span>¿No viste la pieza que necesitas?</span>
+      <h2>Pregúntanos por WhatsApp</h2>
+      <p>Podemos revisar disponibilidad, compatibilidad, precio y fotos de la autoparte.</p>
+    </div>
+
+    <a href="https://wa.me/525632753982?text=Hola,%20no%20encontré%20la%20pieza%20que%20busco" target="_blank">
+      Preguntar disponibilidad
+    </a>
+  </section>
+
+  <footer>
+    <h3>AUTOPARTES VENCES</h3>
+    <p>Refacciones usadas originales y seminuevas. Fotos reales, cotización rápida y atención directa.</p>
+  </footer>
+
+  <a class="floating-whatsapp" href="https://wa.me/525632753982?text=Hola,%20quiero%20cotizar%20una%20autoparte" target="_blank">
+    WhatsApp
+  </a>
+
+  <script src="script.js"></script>
+</body>
+</html>
