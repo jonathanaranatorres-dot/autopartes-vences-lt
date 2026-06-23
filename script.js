@@ -279,5 +279,3 @@ clearFilters.addEventListener("click", () => {
 
 setupFilters();
 renderParts();
-
-}
