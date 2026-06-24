@@ -1,454 +1,651 @@
-const WHATSAPP_NUMBER = "525632753982";
+let todosLosProductos = [];
+let carrito = JSON.parse(localStorage.getItem("carritoAutopartesVences")) || [];
 
-const $ = (selector) => document.querySelector(selector);
-const $$ = (selector) => [...document.querySelectorAll(selector)];
+const WHATSAPP = "525632753982";
 
-let inventario = [];
-let filtroPiezaRapida = "";
+document.addEventListener("DOMContentLoaded", () => {
+  crearModalProducto();
+  crearCarrito();
 
-const elementos = {
-  menuToggle: $("#menuToggle"),
-  navLinks: $("#navLinks"),
-  busqueda: $("#busqueda"),
-  marca: $("#filtroMarca"),
-  modelo: $("#filtroModelo"),
-  anio: $("#filtroAnio"),
-  limpiar: $("#limpiarFiltros"),
-  productos: $("#productos"),
-  contador: $("#contador"),
-  vacio: $("#mensajeVacio"),
-  compartir: $("#compartirCatalogo"),
-  statTotal: $("#statTotal"),
-  statMarcas: $("#statMarcas"),
-  statFotos: $("#statFotos")
-};
+  fetch("datos.json")
+    .then(response => {
+      if (!response.ok) throw new Error("No se pudo cargar datos.json");
+      return response.json();
+    })
+    .then(productos => {
+      todosLosProductos = productos;
 
-elementos.menuToggle?.addEventListener("click", () => {
-  elementos.navLinks?.classList.toggle("open");
+      cargarMarcas(productos);
+      cargarModelos(productos);
+      cargarAnios(productos);
+      pintarChipsMarcas(productos);
+      actualizarEstadisticas(productos);
+      mostrarProductos(productos);
+      actualizarCarrito();
+
+      document.getElementById("busqueda").addEventListener("input", filtrar);
+
+      document.getElementById("filtroMarca").addEventListener("change", () => {
+        const productosMarca = filtrarPorMarca();
+        cargarModelos(productosMarca);
+        cargarAnios(productosMarca);
+        filtrar();
+      });
+
+      document.getElementById("filtroModelo").addEventListener("change", () => {
+        const productosMarcaModelo = filtrarPorMarcaYModelo();
+        cargarAnios(productosMarcaModelo);
+        filtrar();
+      });
+
+      document.getElementById("filtroAnio").addEventListener("change", filtrar);
+      document.getElementById("limpiarFiltros").addEventListener("click", limpiarFiltros);
+      document.getElementById("compartirCatalogo").addEventListener("click", compartirCatalogo);
+    })
+    .catch(error => {
+      console.error("Error cargando datos.json:", error);
+      document.getElementById("contador").textContent = "No se pudo cargar el inventario.";
+      document.querySelector(".productos").innerHTML = `
+        <div class="mensaje-vacio">
+          <h2>Error cargando inventario</h2>
+          <p>Revisa que el archivo datos.json esté en la misma carpeta que index.html.</p>
+        </div>
+      `;
+    });
 });
 
-elementos.navLinks?.querySelectorAll("a").forEach((link) => {
-  link.addEventListener("click", () => elementos.navLinks?.classList.remove("open"));
-});
-
-function normalizar(texto) {
-  return String(texto ?? "")
+function normalizarTexto(texto) {
+  return String(texto || "")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .trim();
+    .replace(/[^a-zA-Z0-9]/g, "")
+    .toLowerCase();
 }
 
-function limpiarTexto(texto) {
-  return normalizar(texto).replace(/[^a-z0-9]/g, "");
+function escaparHTML(texto) {
+  return String(texto || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
 function obtenerValor(producto, nombres) {
-  const llaves = Object.keys(producto || {});
+  const llaves = Object.keys(producto);
 
-  for (const nombre of nombres) {
-    const buscada = limpiarTexto(nombre);
-    const encontrada = llaves.find((llave) => limpiarTexto(llave) === buscada);
-    if (encontrada && producto[encontrada] !== undefined && producto[encontrada] !== null) {
-      return String(producto[encontrada]).trim();
+  for (let nombre of nombres) {
+    const nombreNormalizado = normalizarTexto(nombre);
+
+    for (let llave of llaves) {
+      if (normalizarTexto(llave) === nombreNormalizado) {
+        return producto[llave] || "";
+      }
     }
   }
 
   return "";
 }
 
-function datosProducto(producto) {
+function obtenerDatosProducto(producto) {
   return {
-    id: obtenerValor(producto, ["id", "ID", "clave"]) || "",
+    id: obtenerValor(producto, ["id", "ID"]),
     marca: obtenerValor(producto, ["marca", "Marca"]),
     modelo: obtenerValor(producto, ["modelo", "Modelo"]),
-    anio: obtenerValor(producto, ["anio", "año", "Año", "ano", "year"]),
-    pieza: obtenerValor(producto, ["pieza", "Pieza", "refaccion", "refacción"]),
-    numeroParte: obtenerValor(producto, ["numero_parte", "numero parte", "número parte", "No Parte", "parte"]),
+    anio: obtenerValor(producto, ["anio", "año", "Año"]),
+    pieza: obtenerValor(producto, ["pieza", "Pieza"]),
     lado: obtenerValor(producto, ["lado", "Lado"]),
     color: obtenerValor(producto, ["color", "Color"]),
-    estado: obtenerValor(producto, ["estado", "Estado", "condicion", "condición"]),
+    estado: obtenerValor(producto, ["estado", "Estado"]),
     precio: obtenerValor(producto, ["precio", "Precio"]),
-    fotoPrincipal: obtenerValor(producto, ["fotoPrincipal", "Foto Principal", "foto principal", "Foto_Principal", "foto_principal", "imagen", "Imagen", "foto", "Foto"]),
-    link: obtenerValor(producto, ["link", "Link", "carpeta", "drive", "galeria", "galería"])
+    numeroParte: obtenerValor(producto, ["numero_parte", "Numero de Parte", "Número de Parte"]),
+    fotoPrincipal: obtenerValor(producto, [
+      "fotoPrincipal",
+      "Foto Principal",
+      "foto principal",
+      "Foto_Principal",
+      "foto_principal",
+      "imagen",
+      "Imagen",
+      "foto",
+      "Foto"
+    ]),
+    linkFotos: obtenerValor(producto, ["link", "Link", "fotos", "Fotos"])
   };
-}
-
-function extraerDriveId(link) {
-  const texto = String(link || "");
-
-  const patrones = [
-    /\/file\/d\/([^/]+)/,
-    /\/d\/([^/]+)/,
-    /[?&]id=([^&]+)/,
-    /open\?id=([^&]+)/,
-    /uc\?id=([^&]+)/
-  ];
-
-  for (const patron of patrones) {
-    const match = texto.match(patron);
-    if (match?.[1]) return match[1];
-  }
-
-  return "";
 }
 
 function convertirDriveAImagen(link) {
   if (!link) return "";
-  const texto = String(link).trim();
-  const id = extraerDriveId(texto);
 
-  if (id) {
-    return `https://drive.google.com/thumbnail?id=${id}&sz=w1200`;
-  }
+  let id = "";
 
-  return texto;
+  const matchFile = String(link).match(/\/d\/([^/]+)/);
+  if (matchFile && matchFile[1]) id = matchFile[1];
+
+  const matchId = String(link).match(/[?&]id=([^&]+)/);
+  if (!id && matchId && matchId[1]) id = matchId[1];
+
+  if (id) return `https://drive.google.com/thumbnail?id=${id}&sz=w1200`;
+
+  return link;
 }
 
-function numeroAYear(numero) {
-  const n = Number(numero);
-  if (!Number.isFinite(n)) return null;
-  if (n < 100) return n >= 80 ? 1900 + n : 2000 + n;
-  return n;
-}
+function formatearPrecio(precio) {
+  const numero = Number(String(precio || "").replace(/[^0-9.]/g, ""));
 
-function obtenerAnios(producto) {
-  const { anio } = datosProducto(producto);
-  const numeros = String(anio || "").match(/\d{2,4}/g);
+  if (!numero) return precio || "Consultar";
 
-  if (!numeros) return [];
-
-  const years = numeros.map(numeroAYear).filter(Boolean);
-
-  if (years.length >= 2 && /[-–—a]/i.test(anio)) {
-    const inicio = Math.min(years[0], years[1]);
-    const fin = Math.max(years[0], years[1]);
-
-    if (fin - inicio <= 35) {
-      return Array.from({ length: fin - inicio + 1 }, (_, index) => inicio + index);
-    }
-  }
-
-  return [...new Set(years)];
-}
-
-function formatoPrecio(precio) {
-  const limpio = String(precio || "").replace(/[^\d.]/g, "");
-  const numero = Number(limpio);
-
-  if (!precio || normalizar(precio) === "n/c") return "Cotizar";
-  if (!Number.isFinite(numero) || numero <= 0) return precio;
-
-  return numero.toLocaleString("es-MX", {
+  return new Intl.NumberFormat("es-MX", {
     style: "currency",
     currency: "MXN",
     maximumFractionDigits: 0
+  }).format(numero);
+}
+
+function limpiarSelect(selectId, textoInicial) {
+  const select = document.getElementById(selectId);
+  select.innerHTML = `<option value="">${textoInicial}</option>`;
+}
+
+function valoresUnicos(productos, nombresCampo) {
+  return [
+    ...new Set(
+      productos
+        .map(producto => obtenerValor(producto, nombresCampo))
+        .filter(valor => valor !== "")
+    )
+  ].sort((a, b) => String(a).localeCompare(String(b), "es", { numeric: true }));
+}
+
+function cargarMarcas(productos) {
+  limpiarSelect("filtroMarca", "Todas las marcas");
+
+  const select = document.getElementById("filtroMarca");
+
+  valoresUnicos(productos, ["marca", "Marca"]).forEach(marca => {
+    select.innerHTML += `<option value="${escaparHTML(marca)}">${escaparHTML(marca)}</option>`;
   });
 }
 
-function ordenarUnicos(valores) {
-  return [...new Set(valores.filter(Boolean))]
-    .sort((a, b) => String(a).localeCompare(String(b), "es", { numeric: true }));
-}
+function cargarModelos(productos) {
+  limpiarSelect("filtroModelo", "Todos los modelos");
 
-function llenarSelect(select, valores, textoBase) {
-  if (!select) return;
+  const select = document.getElementById("filtroModelo");
 
-  const valorActual = select.value;
-  select.innerHTML = `<option value="">${textoBase}</option>`;
-
-  valores.forEach((valor) => {
-    const option = document.createElement("option");
-    option.value = valor;
-    option.textContent = valor;
-    select.appendChild(option);
-  });
-
-  if ([...select.options].some((option) => option.value === valorActual)) {
-    select.value = valorActual;
-  }
-}
-
-function baseParaFiltros() {
-  const marca = elementos.marca?.value || "";
-  const modelo = elementos.modelo?.value || "";
-
-  return inventario.filter((producto) => {
-    const datos = datosProducto(producto);
-    const coincideMarca = !marca || datos.marca === marca;
-    const coincideModelo = !modelo || datos.modelo === modelo;
-    return coincideMarca && coincideModelo;
+  valoresUnicos(productos, ["modelo", "Modelo"]).forEach(modelo => {
+    select.innerHTML += `<option value="${escaparHTML(modelo)}">${escaparHTML(modelo)}</option>`;
   });
 }
 
-function actualizarFiltros(cambio = "") {
-  const marcaSeleccionada = elementos.marca?.value || "";
-  const modeloSeleccionado = elementos.modelo?.value || "";
-  const anioSeleccionado = elementos.anio?.value || "";
+function cargarAnios(productos) {
+  limpiarSelect("filtroAnio", "Todos los años");
 
-  const marcas = ordenarUnicos(inventario.map((producto) => datosProducto(producto).marca));
-  llenarSelect(elementos.marca, marcas, "Todas");
+  const select = document.getElementById("filtroAnio");
 
-  if (marcaSeleccionada && marcas.includes(marcaSeleccionada)) {
-    elementos.marca.value = marcaSeleccionada;
-  }
-
-  if (cambio === "marca") {
-    elementos.modelo.value = "";
-    elementos.anio.value = "";
-  }
-
-  if (cambio === "modelo") {
-    elementos.anio.value = "";
-  }
-
-  const productosParaModelos = inventario.filter((producto) => {
-    const datos = datosProducto(producto);
-    return !elementos.marca.value || datos.marca === elementos.marca.value;
+  valoresUnicos(productos, ["anio", "año", "Año"]).forEach(anio => {
+    select.innerHTML += `<option value="${escaparHTML(anio)}">${escaparHTML(anio)}</option>`;
   });
-
-  const modelos = ordenarUnicos(productosParaModelos.map((producto) => datosProducto(producto).modelo));
-  llenarSelect(elementos.modelo, modelos, "Todos");
-
-  if (modeloSeleccionado && modelos.includes(modeloSeleccionado) && cambio !== "marca") {
-    elementos.modelo.value = modeloSeleccionado;
-  }
-
-  const productosParaAnios = baseParaFiltros();
-  const anios = ordenarUnicos(productosParaAnios.flatMap(obtenerAnios)).sort((a, b) => b - a);
-  llenarSelect(elementos.anio, anios, "Todos");
-
-  if (anioSeleccionado && anios.map(String).includes(String(anioSeleccionado)) && cambio !== "marca" && cambio !== "modelo") {
-    elementos.anio.value = anioSeleccionado;
-  }
 }
 
-function productoCoincide(producto) {
-  const datos = datosProducto(producto);
-  const textoBusqueda = normalizar(elementos.busqueda?.value || "");
-  const marca = elementos.marca?.value || "";
-  const modelo = elementos.modelo?.value || "";
-  const anio = elementos.anio?.value || "";
+function pintarChipsMarcas(productos) {
+  const contenedor = document.getElementById("marcasDestacadas");
+  const marcas = valoresUnicos(productos, ["marca", "Marca"]);
 
-  const bolsaTexto = normalizar([
-    datos.id,
-    datos.marca,
-    datos.modelo,
-    datos.anio,
-    datos.pieza,
-    datos.numeroParte,
-    datos.lado,
-    datos.color,
-    datos.estado,
-    datos.precio
-  ].join(" "));
+  contenedor.innerHTML = "";
 
-  const coincideBusqueda = !textoBusqueda || bolsaTexto.includes(textoBusqueda);
-  const coincideMarca = !marca || datos.marca === marca;
-  const coincideModelo = !modelo || datos.modelo === modelo;
-  const coincideAnio = !anio || obtenerAnios(producto).includes(Number(anio)) || normalizar(datos.anio).includes(normalizar(anio));
-  const coincidePiezaRapida = !filtroPiezaRapida || normalizar(datos.pieza).includes(normalizar(filtroPiezaRapida));
+  marcas.forEach(marca => {
+    const boton = document.createElement("button");
+    boton.type = "button";
+    boton.textContent = marca;
 
-  return coincideBusqueda && coincideMarca && coincideModelo && coincideAnio && coincidePiezaRapida;
-}
+    boton.addEventListener("click", () => {
+      document.getElementById("filtroMarca").value = marca;
 
-function crearMensajeWhatsApp(datos) {
-  const titulo = `${datos.pieza || "Pieza"} ${datos.marca || ""} ${datos.modelo || ""} ${datos.anio || ""}`.replace(/\s+/g, " ").trim();
-  return `Hola Autopartes Vences, quiero cotizar: ${titulo}. ID: ${datos.id || "N/C"}. ¿Sigue disponible?`;
-}
+      const productosMarca = filtrarPorMarca();
 
-function imagenFallbackHTML() {
-  return `<div class="img-fallback"><span>Foto no disponible<br>Pregunta por WhatsApp</span></div>`;
-}
+      cargarModelos(productosMarca);
+      cargarAnios(productosMarca);
+      filtrar();
 
-function mostrarProductos(lista) {
-  if (!elementos.productos) return;
+      document.getElementById("catalogo").scrollIntoView({ behavior: "smooth" });
+    });
 
-  const productosOrdenados = [...lista].sort((a, b) => {
-    const da = datosProducto(a);
-    const db = datosProducto(b);
-    return `${da.marca} ${da.modelo} ${da.pieza}`.localeCompare(`${db.marca} ${db.modelo} ${db.pieza}`, "es", { numeric: true });
+    contenedor.appendChild(boton);
   });
+}
 
-  elementos.productos.innerHTML = "";
+function actualizarEstadisticas(productos) {
+  const total = productos.length;
+  const marcas = valoresUnicos(productos, ["marca", "Marca"]).length;
+  const fotos = productos.filter(producto => obtenerDatosProducto(producto).fotoPrincipal).length;
 
-  productosOrdenados.forEach((producto) => {
-    const datos = datosProducto(producto);
-    const foto = convertirDriveAImagen(datos.fotoPrincipal);
-    const whatsapp = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(crearMensajeWhatsApp(datos))}`;
-    const titulo = `${datos.pieza || "Autoparte"} ${datos.marca || ""} ${datos.modelo || ""}`.replace(/\s+/g, " ").trim();
+  document.getElementById("statTotal").textContent = total;
+  document.getElementById("statMarcas").textContent = marcas;
+  document.getElementById("statFotos").textContent = fotos;
+}
 
-    const article = document.createElement("article");
-    article.className = "producto";
+function filtrarPorMarca() {
+  const marcaSeleccionada = document.getElementById("filtroMarca").value;
 
-    const imagenHTML = foto
-      ? `<img src="${foto}" alt="${titulo}" loading="lazy">`
-      : "";
-
-    article.innerHTML = `
-      <div class="producto-imagen">
-        ${datos.link
-          ? `<a class="foto-link" href="${datos.link}" target="_blank" rel="noopener" aria-label="Ver más fotos de ${titulo}">
-              ${imagenHTML}
-              ${imagenFallbackHTML()}
-              <span class="foto-overlay">Ver más fotos</span>
-            </a>`
-          : `${imagenHTML}
-             ${imagenFallbackHTML()}`}
-        <span class="estado-badge">${datos.estado || "Disponible"}</span>
-      </div>
-
-      <div class="producto-info">
-        <h3>${titulo}</h3>
-
-        <div class="meta-grid">
-          ${datos.marca ? `<span>${datos.marca}</span>` : ""}
-          ${datos.modelo ? `<span>${datos.modelo}</span>` : ""}
-          ${datos.anio ? `<span>${datos.anio}</span>` : ""}
-          ${datos.lado && normalizar(datos.lado) !== "n/c" ? `<span>${datos.lado}</span>` : ""}
-        </div>
-
-        <div class="detalles">
-          ${datos.numeroParte && normalizar(datos.numeroParte) !== "n/c" ? `<div><strong>No. parte:</strong> ${datos.numeroParte}</div>` : ""}
-          ${datos.color && normalizar(datos.color) !== "n/c" ? `<div><strong>Color:</strong> ${datos.color}</div>` : ""}
-          ${datos.id ? `<div><strong>ID:</strong> ${datos.id}</div>` : ""}
-        </div>
-
-        <div class="producto-footer">
-          <div class="precio">
-            <span>Precio</span>
-            <strong>${formatoPrecio(datos.precio)}</strong>
-          </div>
-
-          <div class="producto-actions">
-            <a class="btn btn-primary" href="${whatsapp}" target="_blank" rel="noopener">Cotizar por WhatsApp</a>
-          </div>
-        </div>
-      </div>
-    `;
-
-    const img = article.querySelector(".producto-imagen img");
-    const fallback = article.querySelector(".img-fallback");
-
-    if (!img && fallback) {
-      fallback.style.display = "grid";
-    } else if (img && fallback) {
-      img.addEventListener("error", () => {
-        img.style.display = "none";
-        fallback.style.display = "grid";
-      });
-    }
-
-    elementos.productos.appendChild(article);
+  return todosLosProductos.filter(producto => {
+    const marca = obtenerValor(producto, ["marca", "Marca"]);
+    return !marcaSeleccionada || marca === marcaSeleccionada;
   });
+}
 
-  if (elementos.contador) {
-    elementos.contador.textContent = `${productosOrdenados.length} pieza${productosOrdenados.length === 1 ? "" : "s"} encontrada${productosOrdenados.length === 1 ? "" : "s"}`;
-  }
+function filtrarPorMarcaYModelo() {
+  const marcaSeleccionada = document.getElementById("filtroMarca").value;
+  const modeloSeleccionado = document.getElementById("filtroModelo").value;
 
-  if (elementos.vacio) {
-    elementos.vacio.hidden = productosOrdenados.length !== 0;
-  }
+  return todosLosProductos.filter(producto => {
+    const marca = obtenerValor(producto, ["marca", "Marca"]);
+    const modelo = obtenerValor(producto, ["modelo", "Modelo"]);
+
+    return (!marcaSeleccionada || marca === marcaSeleccionada) &&
+      (!modeloSeleccionado || modelo === modeloSeleccionado);
+  });
 }
 
 function filtrar() {
-  const filtrados = inventario.filter(productoCoincide);
+  const texto = normalizarTexto(document.getElementById("busqueda").value);
+  const marcaSeleccionada = document.getElementById("filtroMarca").value;
+  const modeloSeleccionado = document.getElementById("filtroModelo").value;
+  const anioSeleccionado = document.getElementById("filtroAnio").value;
+
+  const filtrados = todosLosProductos.filter(producto => {
+    const datos = obtenerDatosProducto(producto);
+
+    const textoProducto = normalizarTexto(`
+      ${datos.id}
+      ${datos.marca}
+      ${datos.modelo}
+      ${datos.anio}
+      ${datos.pieza}
+      ${datos.lado}
+      ${datos.color}
+      ${datos.estado}
+      ${datos.numeroParte}
+    `);
+
+    return textoProducto.includes(texto) &&
+      (!marcaSeleccionada || datos.marca === marcaSeleccionada) &&
+      (!modeloSeleccionado || datos.modelo === modeloSeleccionado) &&
+      (!anioSeleccionado || datos.anio === anioSeleccionado);
+  });
+
   mostrarProductos(filtrados);
 }
 
-function actualizarEstadisticas() {
-  const piezas = inventario.length;
-  const marcas = ordenarUnicos(inventario.map((producto) => datosProducto(producto).marca)).length;
-  const fotos = inventario.filter((producto) => datosProducto(producto).fotoPrincipal).length;
-
-  if (elementos.statTotal) elementos.statTotal.textContent = piezas;
-  if (elementos.statMarcas) elementos.statMarcas.textContent = marcas;
-  if (elementos.statFotos) elementos.statFotos.textContent = fotos;
-}
-
 function limpiarFiltros() {
-  if (elementos.busqueda) elementos.busqueda.value = "";
-  if (elementos.marca) elementos.marca.value = "";
-  if (elementos.modelo) elementos.modelo.value = "";
-  if (elementos.anio) elementos.anio.value = "";
-  filtroPiezaRapida = "";
+  document.getElementById("busqueda").value = "";
+  document.getElementById("filtroMarca").value = "";
 
-  $$(".chip").forEach((chip) => chip.classList.toggle("active", chip.dataset.pieza === ""));
+  cargarModelos(todosLosProductos);
+  cargarAnios(todosLosProductos);
 
-  actualizarFiltros();
-  filtrar();
+  document.getElementById("filtroModelo").value = "";
+  document.getElementById("filtroAnio").value = "";
+
+  mostrarProductos(todosLosProductos);
 }
 
 function compartirCatalogo() {
-  const url = window.location.href.split("#")[0];
-  const texto = "Catálogo de AUTOPARTES VENCES";
+  const datos = {
+    title: "AUTOPARTES VENCES",
+    text: "Catálogo digital de autopartes disponibles.",
+    url: window.location.href
+  };
 
   if (navigator.share) {
-    navigator.share({ title: texto, text: "Busca autopartes por marca, modelo, año o pieza.", url }).catch(() => {});
+    navigator.share(datos).catch(() => {});
+  } else {
+    navigator.clipboard.writeText(window.location.href);
+    alert("Link del catálogo copiado.");
+  }
+}
+
+function mostrarProductos(productos) {
+  const contenedor = document.querySelector(".productos");
+
+  contenedor.innerHTML = "";
+
+  document.getElementById("contador").innerHTML =
+    `Mostrando <strong>${productos.length}</strong> de <strong>${todosLosProductos.length}</strong> piezas disponibles`;
+
+  if (productos.length === 0) {
+    contenedor.innerHTML = `
+      <div class="mensaje-vacio">
+        <h2>No encontramos piezas con esos filtros</h2>
+        <p>Intenta cambiar marca, modelo, año o escríbenos por WhatsApp para revisar disponibilidad.</p>
+        <a href="https://wa.me/${WHATSAPP}?text=Hola,%20busco%20una%20autoparte%20que%20no%20aparece%20en%20el%20catálogo" target="_blank">
+          Preguntar por WhatsApp
+        </a>
+      </div>
+    `;
     return;
   }
 
-  navigator.clipboard?.writeText(url);
-  alert("Link del catálogo copiado.");
-}
+  productos.forEach(producto => {
+    const datos = obtenerDatosProducto(producto);
+    const foto = convertirDriveAImagen(datos.fotoPrincipal);
 
-function conectarEventos() {
-  elementos.busqueda?.addEventListener("input", filtrar);
+    const titulo = `${datos.pieza} ${datos.lado || ""}`.trim();
+    const subtitulo = `${datos.marca} ${datos.modelo} ${datos.anio}`.trim();
 
-  elementos.marca?.addEventListener("change", () => {
-    actualizarFiltros("marca");
-    filtrar();
-  });
+    const mensajeWhatsApp = encodeURIComponent(
+      `Hola, me interesa esta autoparte:\n\n` +
+      `${titulo}\n` +
+      `${subtitulo}\n` +
+      `ID: ${datos.id || "N/C"}\n` +
+      `Precio: ${formatearPrecio(datos.precio)}\n\n` +
+      `¿Me puedes confirmar disponibilidad, compatibilidad y envío?`
+    );
 
-  elementos.modelo?.addEventListener("change", () => {
-    actualizarFiltros("modelo");
-    filtrar();
-  });
+    contenedor.innerHTML += `
+      <article class="producto producto-click" data-id="${escaparHTML(datos.id)}">
+        <div class="product-media">
+          ${
+            foto
+              ? `<img class="foto-producto" src="${escaparHTML(foto)}" alt="${escaparHTML(titulo)} ${escaparHTML(subtitulo)}">`
+              : `<div class="sin-foto">Sin foto principal</div>`
+          }
+          <span class="product-badge">${escaparHTML(datos.estado || "Disponible")}</span>
+        </div>
 
-  elementos.anio?.addEventListener("change", filtrar);
-  elementos.limpiar?.addEventListener("click", limpiarFiltros);
-  elementos.compartir?.addEventListener("click", compartirCatalogo);
+        <div class="product-body">
+          <span class="product-id">ID ${escaparHTML(datos.id || "N/C")}</span>
 
-  $$(".chip").forEach((chip) => {
-    chip.addEventListener("click", () => {
-      $$(".chip").forEach((boton) => boton.classList.remove("active"));
-      chip.classList.add("active");
-      filtroPiezaRapida = chip.dataset.pieza || "";
-      filtrar();
-    });
-  });
-}
+          <h2>${escaparHTML(titulo || "Autoparte")}</h2>
+          <h3>${escaparHTML(subtitulo || "Consultar compatibilidad")}</h3>
 
-function cargarInventario() {
-  fetch("datos.json", { cache: "no-store" })
-    .then((response) => {
-      if (!response.ok) throw new Error("No se pudo cargar datos.json");
-      return response.json();
-    })
-    .then((datos) => {
-      inventario = Array.isArray(datos) ? datos : (datos.productos || datos.inventario || datos.data || []);
-
-      actualizarFiltros();
-      actualizarEstadisticas();
-      conectarEventos();
-      filtrar();
-    })
-    .catch((error) => {
-      console.error("Error cargando inventario:", error);
-
-      if (elementos.contador) {
-        elementos.contador.textContent = "No se pudo cargar el inventario.";
-      }
-
-      if (elementos.productos) {
-        elementos.productos.innerHTML = `
-          <div class="mensaje-vacio">
-            <h2>Error cargando inventario</h2>
-            <p>Revisa que <strong>datos.json</strong> siga en la misma carpeta que <strong>index.html</strong>.</p>
+          <div class="product-specs">
+            <span><b>Lado</b>${escaparHTML(datos.lado || "N/C")}</span>
+            <span><b>Color</b>${escaparHTML(datos.color || "N/C")}</span>
+            <span><b>No. Parte</b>${escaparHTML(datos.numeroParte || "N/C")}</span>
           </div>
-        `;
-      }
+
+          <strong class="precio">${formatearPrecio(datos.precio)}</strong>
+
+          <p class="envio-mini">Envíos a domicilio con cargo al cliente.</p>
+
+          <div class="product-actions">
+            <button type="button" class="btn-ver" onclick="abrirProductoPorId('${escaparHTML(datos.id)}')">
+              Ver pieza
+            </button>
+
+            <button type="button" class="btn-carrito" onclick="agregarAlCarritoPorId('${escaparHTML(datos.id)}')">
+              Agregar
+            </button>
+
+            <a href="https://wa.me/${WHATSAPP}?text=${mensajeWhatsApp}" target="_blank" onclick="event.stopPropagation()">
+              WhatsApp
+            </a>
+          </div>
+        </div>
+      </article>
+    `;
+  });
+
+  document.querySelectorAll(".producto-click").forEach(card => {
+    card.addEventListener("click", event => {
+      if (event.target.closest("button") || event.target.closest("a")) return;
+      abrirProductoPorId(card.dataset.id);
     });
+  });
 }
 
-cargarInventario();
+function buscarProductoPorId(id) {
+  return todosLosProductos.find(producto => {
+    const datos = obtenerDatosProducto(producto);
+    return String(datos.id) === String(id);
+  });
+}
+
+function abrirProductoPorId(id) {
+  const producto = buscarProductoPorId(id);
+  if (!producto) return;
+
+  abrirModalProducto(producto);
+}
+
+function crearModalProducto() {
+  const modal = document.createElement("div");
+
+  modal.id = "modalProducto";
+  modal.className = "modal-producto";
+  modal.innerHTML = `
+    <div class="modal-backdrop" onclick="cerrarModalProducto()"></div>
+
+    <section class="modal-card">
+      <button class="modal-cerrar" type="button" onclick="cerrarModalProducto()">×</button>
+      <div id="modalContenido"></div>
+    </section>
+  `;
+
+  document.body.appendChild(modal);
+}
+
+function abrirModalProducto(producto) {
+  const datos = obtenerDatosProducto(producto);
+  const foto = convertirDriveAImagen(datos.fotoPrincipal);
+
+  const titulo = `${datos.pieza} ${datos.lado || ""}`.trim();
+  const subtitulo = `${datos.marca} ${datos.modelo} ${datos.anio}`.trim();
+
+  const mensajeWhatsApp = encodeURIComponent(
+    `Hola, quiero cotizar esta pieza:\n\n` +
+    `${titulo}\n` +
+    `${subtitulo}\n` +
+    `ID: ${datos.id || "N/C"}\n` +
+    `No. Parte: ${datos.numeroParte || "N/C"}\n` +
+    `Precio: ${formatearPrecio(datos.precio)}\n\n` +
+    `Mi ubicación es: `
+  );
+
+  document.getElementById("modalContenido").innerHTML = `
+    <div class="detalle-grid">
+      <div class="detalle-imagen">
+        ${
+          foto
+            ? `<img src="${escaparHTML(foto)}" alt="${escaparHTML(titulo)}">`
+            : `<div class="sin-foto detalle-sin-foto">Sin foto principal</div>`
+        }
+
+        ${
+          datos.linkFotos
+            ? `<a class="detalle-galeria" href="${escaparHTML(datos.linkFotos)}" target="_blank">Ver galería completa</a>`
+            : ""
+        }
+      </div>
+
+      <div class="detalle-info">
+        <span class="detalle-id">ID ${escaparHTML(datos.id || "N/C")}</span>
+
+        <h2>${escaparHTML(titulo || "Autoparte")}</h2>
+        <h3>${escaparHTML(subtitulo || "Consultar compatibilidad")}</h3>
+
+        <strong class="detalle-precio">${formatearPrecio(datos.precio)}</strong>
+
+        <p class="detalle-aviso">
+          Envíos a domicilio con cargo al cliente. Confirmamos disponibilidad,
+          compatibilidad y costo de envío antes de cerrar la venta.
+        </p>
+
+        <div class="detalle-tabla">
+          <p><b>Marca:</b> ${escaparHTML(datos.marca || "N/C")}</p>
+          <p><b>Modelo:</b> ${escaparHTML(datos.modelo || "N/C")}</p>
+          <p><b>Año:</b> ${escaparHTML(datos.anio || "N/C")}</p>
+          <p><b>Pieza:</b> ${escaparHTML(datos.pieza || "N/C")}</p>
+          <p><b>Lado:</b> ${escaparHTML(datos.lado || "N/C")}</p>
+          <p><b>Color:</b> ${escaparHTML(datos.color || "N/C")}</p>
+          <p><b>Estado:</b> ${escaparHTML(datos.estado || "N/C")}</p>
+          <p><b>No. Parte:</b> ${escaparHTML(datos.numeroParte || "N/C")}</p>
+        </div>
+
+        <div class="detalle-acciones">
+          <button type="button" onclick="agregarAlCarritoPorId('${escaparHTML(datos.id)}')">
+            Agregar a cotización
+          </button>
+
+          <a href="https://wa.me/${WHATSAPP}?text=${mensajeWhatsApp}" target="_blank">
+            Cotizar por WhatsApp
+          </a>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById("modalProducto").classList.add("activo");
+  document.body.classList.add("bloqueado");
+}
+
+function cerrarModalProducto() {
+  document.getElementById("modalProducto").classList.remove("activo");
+  document.body.classList.remove("bloqueado");
+}
+
+function crearCarrito() {
+  const carritoHTML = document.createElement("div");
+
+  carritoHTML.innerHTML = `
+    <button class="boton-carrito-flotante" type="button" onclick="abrirCarrito()">
+      Cotización <span id="contadorCarrito">0</span>
+    </button>
+
+    <aside id="panelCarrito" class="panel-carrito">
+      <div class="carrito-head">
+        <div>
+          <span>AUTOPARTES VENCES</span>
+          <h2>Tu cotización</h2>
+        </div>
+        <button type="button" onclick="cerrarCarrito()">×</button>
+      </div>
+
+      <p class="carrito-aviso">
+        Envíos a domicilio con cargo al cliente.
+      </p>
+
+      <div id="itemsCarrito" class="items-carrito"></div>
+
+      <div class="carrito-footer">
+        <button type="button" class="enviar-cotizacion" onclick="enviarCarritoWhatsApp()">
+          Enviar cotización por WhatsApp
+        </button>
+
+        <button type="button" class="vaciar-carrito" onclick="vaciarCarrito()">
+          Vaciar cotización
+        </button>
+      </div>
+    </aside>
+
+    <div id="carritoSombra" class="carrito-sombra" onclick="cerrarCarrito()"></div>
+  `;
+
+  document.body.appendChild(carritoHTML);
+}
+
+function agregarAlCarritoPorId(id) {
+  const producto = buscarProductoPorId(id);
+  if (!producto) return;
+
+  const datos = obtenerDatosProducto(producto);
+
+  const yaExiste = carrito.some(item => String(item.id) === String(datos.id));
+
+  if (!yaExiste) {
+    carrito.push({
+      id: datos.id,
+      pieza: datos.pieza,
+      marca: datos.marca,
+      modelo: datos.modelo,
+      anio: datos.anio,
+      lado: datos.lado,
+      precio: datos.precio
+    });
+
+    guardarCarrito();
+  }
+
+  actualizarCarrito();
+  abrirCarrito();
+}
+
+function guardarCarrito() {
+  localStorage.setItem("carritoAutopartesVences", JSON.stringify(carrito));
+}
+
+function actualizarCarrito() {
+  const contador = document.getElementById("contadorCarrito");
+  const items = document.getElementById("itemsCarrito");
+
+  if (!contador || !items) return;
+
+  contador.textContent = carrito.length;
+
+  if (carrito.length === 0) {
+    items.innerHTML = `
+      <div class="carrito-vacio">
+        <h3>Aún no agregas piezas</h3>
+        <p>Selecciona una pieza del catálogo para armar tu cotización.</p>
+      </div>
+    `;
+    return;
+  }
+
+  items.innerHTML = carrito.map(item => `
+    <div class="item-carrito">
+      <div>
+        <h3>${escaparHTML(item.pieza || "Autoparte")} ${escaparHTML(item.lado || "")}</h3>
+        <p>${escaparHTML(item.marca || "")} ${escaparHTML(item.modelo || "")} ${escaparHTML(item.anio || "")}</p>
+        <strong>${formatearPrecio(item.precio)}</strong>
+      </div>
+
+      <button type="button" onclick="quitarDelCarrito('${escaparHTML(item.id)}')">
+        Quitar
+      </button>
+    </div>
+  `).join("");
+}
+
+function abrirCarrito() {
+  document.getElementById("panelCarrito").classList.add("activo");
+  document.getElementById("carritoSombra").classList.add("activo");
+}
+
+function cerrarCarrito() {
+  document.getElementById("panelCarrito").classList.remove("activo");
+  document.getElementById("carritoSombra").classList.remove("activo");
+}
+
+function quitarDelCarrito(id) {
+  carrito = carrito.filter(item => String(item.id) !== String(id));
+  guardarCarrito();
+  actualizarCarrito();
+}
+
+function vaciarCarrito() {
+  carrito = [];
+  guardarCarrito();
+  actualizarCarrito();
+}
+
+function enviarCarritoWhatsApp() {
+  if (carrito.length === 0) {
+    alert("Agrega al menos una pieza a la cotización.");
+    return;
+  }
+
+  const lista = carrito.map((item, index) => {
+    return `${index + 1}. ${item.pieza || "Autoparte"} ${item.lado || ""} ${item.marca || ""} ${item.modelo || ""} ${item.anio || ""} | ID: ${item.id || "N/C"} | Precio: ${formatearPrecio(item.precio)}`;
+  }).join("\n");
+
+  const mensaje = encodeURIComponent(
+    `Hola, quiero cotizar estas autopartes:\n\n` +
+    `${lista}\n\n` +
+    `Envío a domicilio con cargo al cliente.\n` +
+    `Mi ubicación es: \n` +
+    `¿Me puedes confirmar disponibilidad, compatibilidad y costo de envío?`
+  );
+
+  window.open(`https://wa.me/${WHATSAPP}?text=${mensaje}`, "_blank");
+}
