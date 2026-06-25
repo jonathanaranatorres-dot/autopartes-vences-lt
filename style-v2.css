@@ -798,3 +798,206 @@ body::after {
 }
 
 
+
+
+/* AUTOPARTES VENCES · Pagos y pulido premium v5 */
+.products-grid.one-item,
+.products-grid.two-items {
+  justify-content: center;
+}
+.products-grid.one-item { grid-template-columns: minmax(280px, 430px); }
+.products-grid.two-items { grid-template-columns: repeat(2, minmax(280px, 430px)); }
+
+.payments {
+  position: relative;
+  overflow: hidden;
+  padding: 76px 0 82px;
+  background:
+    radial-gradient(circle at 12% 18%, rgba(247,197,49,.20), transparent 26%),
+    radial-gradient(circle at 94% 80%, rgba(197,31,45,.16), transparent 28%),
+    linear-gradient(135deg, #f8fafc 0%, #eef2f7 100%);
+}
+.payments::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(15,23,42,.038) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15,23,42,.032) 1px, transparent 1px);
+  background-size: 46px 46px;
+  opacity: .7;
+  pointer-events: none;
+}
+.payments-wrap {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: .9fr 1.35fr;
+  gap: 28px;
+  align-items: center;
+}
+.payments-copy h2 {
+  margin: 14px 0 14px;
+  font-size: clamp(34px, 4.7vw, 58px);
+  line-height: .94;
+  letter-spacing: -.055em;
+  color: var(--ink);
+  text-wrap: balance;
+}
+.payments-copy p:not(.eyebrow) {
+  margin: 0;
+  color: #475569;
+  font-size: 17px;
+  line-height: 1.62;
+}
+.payments-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.payments-grid article {
+  position: relative;
+  overflow: hidden;
+  min-height: 170px;
+  padding: 22px;
+  border-radius: 28px;
+  background: rgba(255,255,255,.90);
+  border: 1px solid rgba(15,23,42,.10);
+  box-shadow: 0 22px 62px rgba(2,6,23,.10);
+  transition: transform .28s ease, box-shadow .28s ease, border-color .28s ease;
+}
+.payments-grid article::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 4px;
+  background: linear-gradient(90deg, var(--yellow), #f59e0b, var(--red));
+}
+.payments-grid article:hover {
+  transform: translateY(-8px);
+  border-color: rgba(247,197,49,.38);
+  box-shadow: 0 32px 88px rgba(2,6,23,.15);
+}
+.payments-grid span {
+  display: inline-grid;
+  place-items: center;
+  min-width: 50px;
+  height: 50px;
+  padding: 0 13px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #05070d, #1f2937);
+  color: #fff;
+  font-weight: 1000;
+  letter-spacing: .035em;
+  box-shadow: 0 14px 34px rgba(2,6,23,.18);
+}
+.payments-grid h3 {
+  margin: 18px 0 8px;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: -.025em;
+  color: var(--ink);
+}
+.payments-grid p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.payments-note {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  padding: 14px 18px;
+  border-radius: 22px;
+  background: rgba(5,7,13,.94);
+  color: #e2e8f0;
+  border: 1px solid rgba(255,255,255,.10);
+  box-shadow: 0 18px 46px rgba(2,6,23,.18);
+}
+.payments-note strong { color: var(--yellow-2); }
+
+.detail-info { padding-top: 30px; }
+.detail-info .product-topline { padding-right: 52px; }
+.detail-price {
+  width: fit-content;
+  color: #0f172a;
+  letter-spacing: -.035em;
+}
+.detail-price::after {
+  content: "";
+  display: block;
+  height: 5px;
+  margin-top: 6px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--yellow), #f59e0b, transparent);
+}
+.modal-close:not(.inside) {
+  top: 18px;
+  right: 18px;
+  box-shadow: 0 16px 44px rgba(2,6,23,.30);
+}
+.payment-note,
+.cart-payments {
+  margin-top: 16px;
+  padding: 14px 16px;
+  border-radius: 20px;
+  background: linear-gradient(135deg, #f8fafc, #eef2f7);
+  border: 1px solid rgba(15,23,42,.09);
+  color: #334155;
+}
+.payment-note strong,
+.cart-payments strong {
+  display: block;
+  margin-bottom: 4px;
+  color: #0f172a;
+}
+.payment-note span,
+.cart-payments span {
+  color: #475569;
+  font-weight: 900;
+}
+.cart-payments {
+  margin: 0 16px 16px;
+}
+.whatsapp-float {
+  grid-template-columns: auto;
+  width: 62px;
+  padding: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.whatsapp-float::after {
+  content: "Cotizar";
+  max-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: max-width .28s ease, opacity .2s ease, margin-left .28s ease;
+}
+.whatsapp-float:hover {
+  width: auto;
+  padding: 0 18px;
+  border-radius: 999px;
+}
+.whatsapp-float:hover::after {
+  max-width: 90px;
+  opacity: 1;
+  margin-left: 8px;
+}
+
+@media (max-width: 980px) {
+  .payments-wrap { grid-template-columns: 1fr; }
+}
+@media (max-width: 720px) {
+  .products-grid.one-item,
+  .products-grid.two-items,
+  .payments-grid {
+    grid-template-columns: 1fr;
+  }
+  .payments { padding: 58px 0 64px; }
+  .payments-grid article { min-height: auto; }
+  .detail-info .product-topline { padding-right: 0; margin-top: 38px; }
+  .modal-close:not(.inside) { top: 12px; right: 12px; }
+  .payment-note { font-size: 14px; }
+}
