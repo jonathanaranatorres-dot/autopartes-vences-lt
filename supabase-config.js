@@ -32,4 +32,6 @@ window.autopartesSupabase = null;
     cfg.SUPABASE_URL,
     cfg.SUPABASE_ANON_KEY
   );
+  window.avDB = window.autopartesSupabase;
+window.supabase = window.autopartesSupabase;
 })();
