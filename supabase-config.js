@@ -3,8 +3,8 @@
 // Supabase > Project Settings > Data API
 
 window.AV_CONFIG = {
-  SUPABASE_URL: "PEGA_AQUI_TU_SUPABASE_URL",
-  SUPABASE_ANON_KEY: "PEGA_AQUI_TU_SUPABASE_ANON_KEY",
+  SUPABASE_URL: "https://dptfusbqvnjdutoptklb.supabase.co",
+  SUPABASE_ANON_KEY: "sb_publishable_c0U810G6cNuEKk5to1Tjaw_sA7pPWlH",
   STORAGE_BUCKET: "fotos-piezas",
   WHATSAPP_NUMBER: "525632753982"
 };
