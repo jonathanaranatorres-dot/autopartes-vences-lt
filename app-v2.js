@@ -1,6 +1,8 @@
 (() => {
   const WHATSAPP = window.AV_CONFIG?.WHATSAPP_NUMBER || "525632753982";
   const CART_KEY = "carritoAutopartesVencesV2";
+  const PAGE_SIZE = 12;
+  const SEARCH_DEBOUNCE_MS = 220;
   const db = window.autopartesSupabase || window.avDB;
 
   let productos = [];
@@ -8,6 +10,8 @@
   let carrito = [];
   let productoDetalle = null;
   let indiceFotoDetalle = 0;
+  let piezasVisibles = PAGE_SIZE;
+  let filtroTimer = null;
 
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => Array.from(document.querySelectorAll(selector));
@@ -32,9 +36,21 @@
     ["searchInput", "piezaSelect", "marcaSelect", "modeloSelect", "anioSelect", "ladoSelect"].forEach((elementId) => {
       const el = id(elementId);
       if (!el) return;
-      el.addEventListener(elementId === "searchInput" ? "input" : "change", () => {
-        actualizarOpcionesFiltros(elementId);
-        filtrar();
+      const evento = elementId === "searchInput" ? "input" : "change";
+
+      el.addEventListener(evento, () => {
+        const aplicarFiltro = () => {
+          actualizarOpcionesFiltros(elementId);
+          filtrar();
+        };
+
+        if (elementId === "searchInput") {
+          window.clearTimeout(filtroTimer);
+          filtroTimer = window.setTimeout(aplicarFiltro, SEARCH_DEBOUNCE_MS);
+          return;
+        }
+
+        aplicarFiltro();
       });
     });
 
@@ -87,12 +103,12 @@
 
     productos = (data || []).map(normalizarProducto);
     filtrados = productos;
+    piezasVisibles = PAGE_SIZE;
 
     actualizarTodosLosFiltros();
     actualizarStats(productos);
     actualizarSEO(productos);
-    mostrarProductos(productos);
-    setStatus(textoConteoPiezas(productos.length), "ok");
+    filtrar();
   }
 
   function textoConteoPiezas(total) {
@@ -162,8 +178,8 @@
       return coincideBusqueda && coincidePieza && coincideMarca && coincideModelo && coincideAnio && coincideLado;
     });
 
+    piezasVisibles = PAGE_SIZE;
     mostrarProductos(filtrados);
-    setStatus(`${filtrados.length} ${filtrados.length === 1 ? "resultado" : "resultados"}.`, filtrados.length ? "ok" : "");
   }
 
   function productoIncluyeAnio(p, anio) {
@@ -265,22 +281,27 @@
     const template = id("productTemplate");
     if (!grid || !template) return;
 
-    grid.innerHTML = "";
-    grid.classList.toggle("one-item", lista.length === 1);
-    grid.classList.toggle("two-items", lista.length === 2);
+    const total = lista.length;
+    const visibles = lista.slice(0, piezasVisibles);
 
-    if (!lista.length) {
+    grid.innerHTML = "";
+    grid.classList.toggle("one-item", visibles.length === 1);
+    grid.classList.toggle("two-items", visibles.length === 2);
+
+    if (!total) {
       grid.innerHTML = `
         <div class="empty">
           <h3>No hay piezas para mostrar</h3>
           <p>Sube piezas desde el panel admin o revisa los filtros.</p>
         </div>`;
+      actualizarBotonCargarMas(0, 0);
+      setStatus("No hay resultados con esos filtros.", "");
       return;
     }
 
     const fragment = document.createDocumentFragment();
 
-    lista.forEach((producto) => {
+    visibles.forEach((producto, index) => {
       const node = template.content.cloneNode(true);
       const card = node.querySelector(".product-card");
       const photoBtn = node.querySelector(".product-photo");
@@ -299,6 +320,7 @@
       meta.textContent = [producto.marca, producto.modelo, producto.anio].filter(Boolean).join(" · ") || "Autoparte disponible";
       details.innerHTML = detalleHTML("Lado", producto.lado) + detalleHTML("Color", producto.color) + detalleHTML("No. parte", producto.numeroParte) + detalleHTML("Estado", producto.estado);
       price.textContent = formatearPrecio(producto.precio);
+      card.style.setProperty("--card-index", String(index));
 
       const abrir = () => abrirDetalle(producto);
       card.addEventListener("click", abrir);
@@ -315,6 +337,9 @@
       if (producto.fotos.length) {
         img.src = producto.fotos[0];
         img.alt = tituloProducto(producto);
+        img.loading = "lazy";
+        img.decoding = "async";
+        img.fetchPriority = index < 3 ? "auto" : "low";
         count.textContent = `${producto.fotos.length} foto${producto.fotos.length === 1 ? "" : "s"}`;
       } else {
         img.remove();
@@ -327,6 +352,74 @@
     });
 
     grid.appendChild(fragment);
+    actualizarBotonCargarMas(total, visibles.length);
+    actualizarEstadoCatalogo(total, visibles.length);
+  }
+
+  function actualizarEstadoCatalogo(total, visibles) {
+    if (!total) return;
+    const hayFiltros = filtrosActivos();
+    const unidad = total === 1 ? "pieza" : "piezas";
+    const contexto = hayFiltros ? "resultado" : `${unidad} disponible${total === 1 ? "" : "s"}`;
+
+    if (visibles < total) {
+      setStatus(`Mostrando ${visibles} de ${total} ${contexto}.`, "ok");
+      return;
+    }
+
+    if (hayFiltros) {
+      setStatus(`${total} ${total === 1 ? "resultado" : "resultados"} encontrados.`, "ok");
+      return;
+    }
+
+    setStatus(textoConteoPiezas(total), "ok");
+  }
+
+  function filtrosActivos() {
+    const f = getFiltros();
+    return Boolean(f.busqueda || f.pieza || f.marca || f.modelo || f.anio || f.lado);
+  }
+
+  function actualizarBotonCargarMas(total, visibles) {
+    const boton = obtenerBotonCargarMas();
+    const wrap = boton?.parentElement;
+    if (!boton || !wrap) return;
+
+    const restantes = Math.max(total - visibles, 0);
+    if (!restantes) {
+      wrap.hidden = true;
+      return;
+    }
+
+    wrap.hidden = false;
+    boton.textContent = `Cargar ${Math.min(PAGE_SIZE, restantes)} piezas más`;
+    boton.setAttribute("aria-label", `Cargar más piezas. Faltan ${restantes}.`);
+  }
+
+  function obtenerBotonCargarMas() {
+    let boton = id("loadMoreBtn");
+    if (boton) return boton;
+
+    const grid = id("productsGrid");
+    if (!grid) return null;
+
+    const wrap = document.createElement("div");
+    wrap.className = "load-more-wrap";
+    wrap.hidden = true;
+
+    boton = document.createElement("button");
+    boton.id = "loadMoreBtn";
+    boton.type = "button";
+    boton.className = "btn primary load-more-btn";
+    boton.textContent = "Cargar más piezas";
+    boton.addEventListener("click", () => {
+      piezasVisibles += PAGE_SIZE;
+      mostrarProductos(filtrados);
+    });
+
+    wrap.appendChild(boton);
+    grid.insertAdjacentElement("afterend", wrap);
+    return boton;
   }
 
   function tituloProducto(p) {
@@ -476,7 +569,7 @@
     link.classList.remove("disabled");
     cont.innerHTML = items.map((p) => `
       <div class="cart-item">
-        ${p.fotos[0] ? `<img src="${escaparAttr(p.fotos[0])}" alt="${escaparAttr(tituloProducto(p))}">` : `<div class="no-img">Sin foto</div>`}
+        ${p.fotos[0] ? `<img src="${escaparAttr(p.fotos[0])}" alt="${escaparAttr(tituloProducto(p))}" loading="lazy" decoding="async">` : `<div class="no-img">Sin foto</div>`}
         <div>
           <strong>${escapar(tituloProducto(p))}</strong>
           <small>ID: ${escapar(p.id)} · ${escapar(formatearPrecio(p.precio))}</small>
