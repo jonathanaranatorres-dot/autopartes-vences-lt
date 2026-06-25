@@ -37,6 +37,7 @@
     "image": "https://www.autopartesvences.com/imagenes/logo-vences.jpeg",
     "description": "Catálogo digital de autopartes usadas originales con fotos reales y atención directa por WhatsApp.",
     "telephone": "+52 56 3275 3982",
+    "paymentAccepted": ["Efectivo", "Transferencia bancaria", "Tarjeta de crédito", "Tarjeta de débito"],
     "address": {
       "@type": "PostalAddress",
       "addressLocality": "Estado de México",
@@ -55,12 +56,12 @@
   }
   </script>
 
-  <link rel="stylesheet" href="style-v2.css?v=4" />
+  <link rel="stylesheet" href="style-v2.css?v=5" />
 </head>
 <body>
   <header class="top-strip">
     <div class="container top-strip-inner">
-      <span>Autopartes usadas originales · Listas para cotizar · Atención por WhatsApp</span>
+      <span>Autopartes usadas originales · Pagos en local · Atención por WhatsApp</span>
       <a href="https://wa.me/525632753982" target="_blank" rel="noopener">WhatsApp: +52 563 275 3982</a>
     </div>
   </header>
@@ -75,6 +76,7 @@
       <div class="nav-links" id="navLinks">
         <a href="#catalogo">Catálogo</a>
         <a href="#ventajas">Ventajas</a>
+        <a href="#pagos">Pagos</a>
         <a href="#proceso">Cómo comprar</a>
         <button class="nav-cart" id="navCartBtn" type="button">Carrito <span id="navCartCount">0</span></button>
         <a href="https://wa.me/525632753982" target="_blank" rel="noopener" class="nav-cta">WhatsApp</a>
@@ -108,7 +110,7 @@
             <div class="hero-card-grid">
               <span>Fotos reales</span>
               <span>ID de pieza</span>
-              <span>Precio visible</span>
+              <span>Pagos en local</span>
               <span>Compatibilidad</span>
             </div>
           </div>
@@ -125,7 +127,7 @@
           </div>
           <div class="section-actions">
             <button class="btn ghost" id="clearFiltersBtn" type="button">Limpiar</button>
-            <button class="btn ghost" id="refreshBtn" type="button">Actualizar catálogo</button>
+            <button class="btn ghost" id="refreshBtn" type="button">Recargar piezas</button>
           </div>
         </div>
 
@@ -189,6 +191,42 @@
       </div>
     </section>
 
+
+    <section class="payments" id="pagos">
+      <div class="container payments-wrap">
+        <div class="payments-copy">
+          <p class="eyebrow dark">Métodos de pago</p>
+          <h2>Pagos aceptados en el local establecido</h2>
+          <p>Aceptamos transferencia, tarjeta de crédito, tarjeta de débito y efectivo. La disponibilidad, compatibilidad y forma de pago se confirman antes de cerrar la venta.</p>
+        </div>
+        <div class="payments-grid" aria-label="Métodos de pago aceptados">
+          <article>
+            <span>MXN</span>
+            <h3>Efectivo</h3>
+            <p>Pago directo en el local establecido.</p>
+          </article>
+          <article>
+            <span>SPEI</span>
+            <h3>Transferencia</h3>
+            <p>Confirma los datos al momento de cotizar.</p>
+          </article>
+          <article>
+            <span>TDC</span>
+            <h3>Tarjeta de crédito</h3>
+            <p>Pago con tarjeta en punto de venta.</p>
+          </article>
+          <article>
+            <span>TDD</span>
+            <h3>Tarjeta de débito</h3>
+            <p>Compra segura en el local establecido.</p>
+          </article>
+        </div>
+        <div class="payments-note">
+          <strong>Importante:</strong> no hagas pagos hasta confirmar disponibilidad por WhatsApp.
+        </div>
+      </div>
+    </section>
+
     <section class="process" id="proceso">
       <div class="container">
         <div class="section-head section-head-center light">
@@ -221,7 +259,7 @@
   <footer class="footer">
     <div class="container footer-inner">
       <strong>AUTOPARTES VENCES</strong>
-      <span>Autopartes usadas originales · Fotos reales · Atención por WhatsApp</span>
+      <span>Autopartes usadas originales · Fotos reales · Pagos en local · Atención por WhatsApp</span>
     </div>
   </footer>
 
@@ -252,6 +290,10 @@
           <a class="whatsapp-btn" id="detailWhatsapp" target="_blank" rel="noopener">Cotizar por WhatsApp</a>
           <button class="btn secondary" id="detailAddCart" type="button">Agregar al carrito</button>
         </div>
+        <div class="payment-note">
+          <strong>Pagos aceptados en local:</strong>
+          <span>Transferencia · TDC · TDD · Efectivo</span>
+        </div>
       </div>
     </article>
   </div>
@@ -267,6 +309,10 @@
         <button class="modal-close inside" id="cartClose" type="button" aria-label="Cerrar carrito">×</button>
       </div>
       <div class="cart-items" id="cartItems"></div>
+      <div class="cart-payments">
+        <strong>Pagos en local</strong>
+        <span>Transferencia · TDC · TDD · Efectivo</span>
+      </div>
       <div class="cart-footer">
         <button class="btn ghost" id="clearCartBtn" type="button">Vaciar</button>
         <a class="btn primary" id="cartWhatsapp" target="_blank" rel="noopener">Enviar por WhatsApp</a>
@@ -301,7 +347,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js?v=2"></script>
-  <script src="app-v2.js?v=3"></script>
+  <script src="app-v2.js?v=4"></script>
 </body>
 </html>
 
