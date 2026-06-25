@@ -92,7 +92,11 @@
     actualizarStats(productos);
     actualizarSEO(productos);
     mostrarProductos(productos);
-    setStatus(`${productos.length} piezas disponibles cargadas.`, "ok");
+    setStatus(textoConteoPiezas(productos.length), "ok");
+  }
+
+  function textoConteoPiezas(total) {
+    return `${total} ${total === 1 ? "pieza disponible cargada" : "piezas disponibles cargadas"}.`;
   }
 
   function normalizarProducto(row) {
@@ -159,7 +163,7 @@
     });
 
     mostrarProductos(filtrados);
-    setStatus(`${filtrados.length} resultado(s).`, filtrados.length ? "ok" : "");
+    setStatus(`${filtrados.length} ${filtrados.length === 1 ? "resultado" : "resultados"}.`, filtrados.length ? "ok" : "");
   }
 
   function productoIncluyeAnio(p, anio) {
@@ -262,6 +266,8 @@
     if (!grid || !template) return;
 
     grid.innerHTML = "";
+    grid.classList.toggle("one-item", lista.length === 1);
+    grid.classList.toggle("two-items", lista.length === 2);
 
     if (!lista.length) {
       grid.innerHTML = `
@@ -350,7 +356,7 @@
     id("detailTitle").textContent = tituloProducto(producto);
     id("detailMeta").textContent = [producto.marca, producto.modelo, producto.anio].filter(Boolean).join(" · ") || "Autoparte disponible";
     id("detailPrice").textContent = formatearPrecio(producto.precio);
-    id("detailDescription").textContent = producto.descripcion || "Sin descripción adicional. Te recomendamos confirmar compatibilidad por WhatsApp antes de comprar.";
+    id("detailDescription").textContent = producto.descripcion || "Sin descripción adicional. Te recomendamos confirmar compatibilidad por WhatsApp antes de cerrar la compra.";
     id("detailWhatsapp").href = crearWhatsAppProducto(producto);
     id("detailList").innerHTML = detalleHTML("Pieza", producto.pieza) + detalleHTML("Marca", producto.marca) + detalleHTML("Modelo", producto.modelo) + detalleHTML("Año", producto.anio) + detalleHTML("Lado", producto.lado) + detalleHTML("Color", producto.color) + detalleHTML("No. parte", producto.numeroParte) + detalleHTML("Estado", producto.estado);
 
