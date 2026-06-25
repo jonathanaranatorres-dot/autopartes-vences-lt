@@ -55,12 +55,12 @@
   }
   </script>
 
-  <link rel="stylesheet" href="style-v2.css?v=3" />
+  <link rel="stylesheet" href="style-v2.css?v=4" />
 </head>
 <body>
   <header class="top-strip">
     <div class="container top-strip-inner">
-      <span>Autopartes disponibles · Fotos reales · Cotización por WhatsApp</span>
+      <span>Autopartes usadas originales · Listas para cotizar · Atención por WhatsApp</span>
       <a href="https://wa.me/525632753982" target="_blank" rel="noopener">WhatsApp: +52 563 275 3982</a>
     </div>
   </header>
@@ -86,12 +86,12 @@
     <section class="hero">
       <div class="container hero-grid">
         <div class="hero-copy">
-          <p class="eyebrow">Autopartes usadas originales · Fotos reales</p>
-          <h1>Encuentra la pieza correcta sin perder tiempo.</h1>
-          <p class="hero-text">Busca por pieza, marca, modelo, año, lado o número de parte. Abre cada producto para revisar fotos, descripción y detalles antes de cotizar.</p>
+          <p class="eyebrow">Autopartes usadas originales · Listas para cotizar</p>
+          <h1>Encuentra autopartes originales sin dar vueltas.</h1>
+          <p class="hero-text">Explora piezas disponibles con fotos reales, precio, ID y datos de compatibilidad. Agrega al carrito y manda tu cotización directo por WhatsApp.</p>
           <div class="hero-actions">
-            <a class="btn primary" href="#catalogo">Ver catálogo</a>
-            <button class="btn secondary" id="heroCartBtn" type="button">Ver carrito</button>
+            <a class="btn primary" href="#catalogo">Explorar catálogo</a>
+            <button class="btn secondary" id="heroCartBtn" type="button">Cotizar carrito</button>
           </div>
           <div class="hero-stats" aria-label="Estadísticas del catálogo">
             <div><strong id="statTotal">0</strong><span>Piezas</span></div>
@@ -102,14 +102,14 @@
         <div class="hero-panel">
           <div class="panel-glow"></div>
           <div class="hero-card">
-            <span class="mini-label">Motor nuevo</span>
-            <h2>Inventario conectado a Supabase</h2>
-            <p>Las piezas que subes en el admin aparecen aquí con fotos, filtros y carrito directo a WhatsApp.</p>
+            <span class="mini-label">Atención rápida</span>
+            <h2>Piezas verificadas listas para cotizar</h2>
+            <p>Revisa el estado, precio e ID de cada autoparte. Confirmamos compatibilidad y disponibilidad antes de cerrar la venta.</p>
             <div class="hero-card-grid">
-              <span>Galería</span>
-              <span>Detalles</span>
-              <span>Carrito</span>
-              <span>Filtros</span>
+              <span>Fotos reales</span>
+              <span>ID de pieza</span>
+              <span>Precio visible</span>
+              <span>Compatibilidad</span>
             </div>
           </div>
         </div>
@@ -121,18 +121,18 @@
         <div class="section-head">
           <div>
             <p class="eyebrow dark">Catálogo</p>
-            <h2>Inventario disponible</h2>
+            <h2>Piezas disponibles ahora</h2>
           </div>
           <div class="section-actions">
-            <button class="btn ghost" id="clearFiltersBtn" type="button">Limpiar filtros</button>
-            <button class="btn ghost" id="refreshBtn" type="button">Actualizar</button>
+            <button class="btn ghost" id="clearFiltersBtn" type="button">Limpiar</button>
+            <button class="btn ghost" id="refreshBtn" type="button">Actualizar catálogo</button>
           </div>
         </div>
 
         <div class="filters" aria-label="Filtros del catálogo">
           <label class="search-field">
             <span>Buscar</span>
-            <input id="searchInput" type="search" placeholder="Ej. faro, Beat, 2018, derecho, número de parte..." autocomplete="off" />
+            <input id="searchInput" type="search" placeholder="Busca faro, puerta, Beat, Cruze, 2018, derecho..." autocomplete="off" />
           </label>
           <label>
             <span>Pieza</span>
@@ -162,42 +162,58 @@
     </section>
 
     <section class="process" id="ventajas">
-      <div class="container process-grid">
+      <div class="container">
+        <div class="section-head section-head-center">
+          <div>
+            <p class="eyebrow dark">Ventajas</p>
+            <h2>Compra con más confianza</h2>
+          </div>
+        </div>
+        <div class="process-grid">
         <article>
           <span>✓</span>
-          <h3>Fotos reales</h3>
-          <p>Revisa el estado de la pieza antes de pedir cotización.</p>
+          <h3>Fotos reales de cada pieza</h3>
+          <p>Observa el estado físico antes de pedir cotización.</p>
         </article>
         <article>
           <span>✓</span>
-          <h3>Búsqueda rápida</h3>
-          <p>Filtra por marca, modelo, año, lado, pieza o número de parte.</p>
+          <h3>Búsqueda por auto y pieza</h3>
+          <p>Encuentra más rápido por marca, modelo, año, lado o número de parte.</p>
         </article>
         <article>
           <span>✓</span>
-          <h3>WhatsApp directo</h3>
-          <p>El carrito arma el mensaje con los datos de cada autoparte.</p>
+          <h3>Cotización por WhatsApp</h3>
+          <p>Envía una o varias piezas en un solo mensaje, con ID y precio.</p>
         </article>
+        </div>
       </div>
     </section>
 
     <section class="process" id="proceso">
-      <div class="container process-grid">
+      <div class="container">
+        <div class="section-head section-head-center light">
+          <div>
+            <p class="eyebrow">Cómo comprar</p>
+            <h2>De la búsqueda a la cotización en tres pasos</h2>
+          </div>
+        </div>
+        <div class="process-grid">
         <article>
           <span>1</span>
-          <h3>Busca tu pieza</h3>
-          <p>Usa los filtros o escribe lo que necesitas.</p>
+          <h3>Encuentra</h3>
+          <p>Usa los filtros o escribe la pieza que necesitas.</p>
         </article>
         <article>
           <span>2</span>
-          <h3>Abre el producto</h3>
-          <p>Revisa fotos, descripción, número de parte y detalles.</p>
+          <h3>Revisa</h3>
+          <p>Abre el producto para ver fotos, estado, número de parte y precio.</p>
         </article>
         <article>
           <span>3</span>
-          <h3>Envía tu carrito</h3>
-          <p>Cotiza una o varias piezas en un solo mensaje.</p>
+          <h3>Cotiza</h3>
+          <p>Agrega al carrito y manda todo directo por WhatsApp.</p>
         </article>
+        </div>
       </div>
     </section>
   </main>
@@ -205,7 +221,7 @@
   <footer class="footer">
     <div class="container footer-inner">
       <strong>AUTOPARTES VENCES</strong>
-      <span>Catálogo digital conectado al motor de publicaciones</span>
+      <span>Autopartes usadas originales · Fotos reales · Atención por WhatsApp</span>
     </div>
   </footer>
 
