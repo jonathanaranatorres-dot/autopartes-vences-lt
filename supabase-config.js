@@ -1,6 +1,4 @@
 // AUTOPARTES VENCES - Configuración de Supabase
-// Cambia estos valores por los de tu proyecto en Supabase.
-// Supabase > Project Settings > Data API
 
 window.AV_CONFIG = {
   SUPABASE_URL: "https://dptfusbqvnjdutoptklb.supabase.co",
@@ -13,14 +11,15 @@ window.autopartesSupabase = null;
 
 (function iniciarSupabase() {
   const cfg = window.AV_CONFIG;
+
   const incompleto =
     !cfg.SUPABASE_URL ||
     !cfg.SUPABASE_ANON_KEY ||
-    cfg.SUPABASE_URL.includes("https://dptfusbqvnjdutoptklb.supabase.co") ||
-    cfg.SUPABASE_ANON_KEY.includes("sb_publishable_c0U810G6cNuEKk5to1Tjaw_sA7pPWlH");
+    cfg.SUPABASE_URL.includes("AQUI") ||
+    cfg.SUPABASE_ANON_KEY.includes("AQUI");
 
   if (incompleto) {
-    console.warn("Supabase todavía no está configurado. El catálogo usará datos.json como respaldo.");
+    console.warn("Supabase todavía no está configurado.");
     return;
   }
 
