@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="es-MX">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AUTOPARTES VENCES V2 | Catálogo conectado</title>
+  <meta name="description" content="Catálogo V2 de AUTOPARTES VENCES conectado a Supabase. Fotos reales, búsqueda por marca, modelo, año y pieza, cotización directa por WhatsApp." />
+  <meta name="robots" content="noindex, nofollow" />
+  <link rel="icon" type="image/jpeg" href="imagenes/logo-vences.jpeg" />
+  <link rel="stylesheet" href="style-v2.css?v=1" />
+</head>
+<body>
+  <header class="top-strip">
+    <div class="container top-strip-inner">
+      <span>V2 de prueba · Conectado a Supabase</span>
+      <a href="admin.html">Panel admin</a>
+    </div>
+  </header>
+
+  <nav class="nav">
+    <div class="container nav-inner">
+      <a class="brand" href="#inicio" aria-label="Inicio AUTOPARTES VENCES">
+        <img src="imagenes/logo-vences.jpeg" alt="Logo AUTOPARTES VENCES" />
+        <span>AUTOPARTES VENCES</span>
+      </a>
+      <button class="menu-btn" id="menuBtn" type="button" aria-label="Abrir menú">☰</button>
+      <div class="nav-links" id="navLinks">
+        <a href="#catalogo">Catálogo</a>
+        <a href="#proceso">Cómo comprar</a>
+        <a href="https://wa.me/525632753982" target="_blank" rel="noopener" class="nav-cta">WhatsApp</a>
+      </div>
+    </div>
+  </nav>
+
+  <main id="inicio">
+    <section class="hero">
+      <div class="container hero-grid">
+        <div class="hero-copy">
+          <p class="eyebrow">Autopartes usadas originales · Fotos reales</p>
+          <h1>Catálogo V2 para vender piezas más rápido.</h1>
+          <p class="hero-text">Busca por pieza, marca, modelo, año, lado o número de parte. Esta versión ya lee directo del motor de publicaciones.</p>
+          <div class="hero-actions">
+            <a class="btn primary" href="#catalogo">Ver catálogo</a>
+            <a class="btn secondary" href="admin.html">Abrir admin</a>
+          </div>
+          <div class="hero-stats" aria-label="Estadísticas del catálogo">
+            <div><strong id="statTotal">0</strong><span>Piezas</span></div>
+            <div><strong id="statMarcas">0</strong><span>Marcas</span></div>
+            <div><strong id="statConFotos">0</strong><span>Con fotos</span></div>
+          </div>
+        </div>
+        <div class="hero-panel">
+          <div class="panel-glow"></div>
+          <div class="hero-card">
+            <span class="mini-label">Motor activo</span>
+            <h2>Admin → Supabase → Página</h2>
+            <p>Subes la pieza, arrastras fotos y aparece aquí. Sin Drive, sin renombrar foto por foto.</p>
+            <div class="hero-card-grid">
+              <span>Fotos múltiples</span>
+              <span>Filtros</span>
+              <span>WhatsApp</span>
+              <span>Inventario</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="catalog" id="catalogo">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow dark">Catálogo</p>
+            <h2>Inventario disponible</h2>
+          </div>
+          <button class="btn ghost" id="refreshBtn" type="button">Actualizar</button>
+        </div>
+
+        <div class="filters" aria-label="Filtros del catálogo">
+          <label class="search-field">
+            <span>Buscar</span>
+            <input id="searchInput" type="search" placeholder="Ej. faro, Beat, 2018, derecho..." autocomplete="off" />
+          </label>
+          <label>
+            <span>Marca</span>
+            <select id="marcaSelect"><option value="">Todas</option></select>
+          </label>
+          <label>
+            <span>Modelo</span>
+            <select id="modeloSelect"><option value="">Todos</option></select>
+          </label>
+          <label>
+            <span>Año</span>
+            <select id="anioSelect"><option value="">Todos</option></select>
+          </label>
+        </div>
+
+        <div class="catalog-status" id="statusCatalogo">Cargando inventario...</div>
+        <div class="products-grid" id="productsGrid" aria-live="polite"></div>
+      </div>
+    </section>
+
+    <section class="process" id="proceso">
+      <div class="container process-grid">
+        <article>
+          <span>1</span>
+          <h3>Busca tu pieza</h3>
+          <p>Filtra por marca, modelo, año, pieza o lado.</p>
+        </article>
+        <article>
+          <span>2</span>
+          <h3>Revisa fotos</h3>
+          <p>Abre la galería para ver detalles, soportes, conectores y estado.</p>
+        </article>
+        <article>
+          <span>3</span>
+          <h3>Cotiza por WhatsApp</h3>
+          <p>El mensaje se arma con ID, pieza y datos principales.</p>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer-inner">
+      <strong>AUTOPARTES VENCES</strong>
+      <span>Catálogo V2 de prueba</span>
+    </div>
+  </footer>
+
+  <div class="modal" id="photoModal" aria-hidden="true">
+    <button class="modal-backdrop" id="modalBackdrop" type="button" aria-label="Cerrar galería"></button>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-label="Galería de fotos">
+      <button class="modal-close" id="modalClose" type="button" aria-label="Cerrar">×</button>
+      <button class="modal-nav prev" id="modalPrev" type="button" aria-label="Foto anterior">‹</button>
+      <img id="modalImage" src="" alt="Foto de autoparte" />
+      <button class="modal-nav next" id="modalNext" type="button" aria-label="Foto siguiente">›</button>
+      <div class="modal-caption" id="modalCaption"></div>
+    </div>
+  </div>
+
+  <template id="productTemplate">
+    <article class="product-card">
+      <button class="product-photo" type="button">
+        <img alt="" loading="lazy" />
+        <span class="photo-count"></span>
+      </button>
+      <div class="product-body">
+        <div class="product-topline">
+          <span class="tag id-tag"></span>
+          <span class="tag status-tag"></span>
+        </div>
+        <h3></h3>
+        <p class="meta"></p>
+        <dl class="details"></dl>
+        <div class="price-row">
+          <strong class="price"></strong>
+          <a class="whatsapp-btn" target="_blank" rel="noopener">Cotizar</a>
+        </div>
+      </div>
+    </article>
+  </template>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js?v=2"></script>
+  <script src="app-v2.js?v=1"></script>
+</body>
+</html>
