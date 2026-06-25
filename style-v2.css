@@ -1001,3 +1001,47 @@ body::after {
   .modal-close:not(.inside) { top: 12px; right: 12px; }
   .payment-note { font-size: 14px; }
 }
+
+/* AUTOPARTES VENCES · Rendimiento catálogo v6 */
+.load-more-wrap {
+  display: flex;
+  justify-content: center;
+  margin: 28px 0 8px;
+}
+.load-more-wrap[hidden] { display: none; }
+.load-more-btn {
+  min-width: min(100%, 260px);
+  position: relative;
+  isolation: isolate;
+}
+.product-card img,
+.cart-item img,
+.detail-thumbs img {
+  background: #e5e7eb;
+}
+@media (hover: none) {
+  .product-card,
+  .product-card::before,
+  .product-card::after,
+  .product-photo img {
+    transition-duration: .12s;
+  }
+  .product-card:hover,
+  .product-card:focus {
+    transform: none;
+    box-shadow: 0 18px 54px rgba(2,6,23,.1);
+  }
+  .product-card:hover::after,
+  .product-card:focus::after {
+    opacity: 0;
+    transform: none;
+  }
+  .product-card:hover .product-photo img {
+    transform: none;
+    filter: none;
+  }
+}
+@media (max-width: 720px) {
+  .load-more-wrap { margin-top: 22px; }
+  .load-more-btn { width: 100%; }
+}
