@@ -4,20 +4,17 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <title>Autopartes usadas originales en Estado de México | AUTOPARTES VENCES</title>
-  <meta name="description" content="Encuentra faros, puertas, calaveras, rines y más autopartes usadas originales. Consulta fotos reales, compatibilidad y cotiza directo por WhatsApp con AUTOPARTES VENCES en Estado de México." />
+  <title>AUTOPARTES VENCES | Catálogo digital de autopartes usadas originales</title>
+  <meta name="description" content="Catálogo digital de AUTOPARTES VENCES. Busca autopartes usadas originales por pieza, marca, modelo, año, lado o número de parte. Fotos reales y cotización directa por WhatsApp." />
   <meta name="robots" content="index, follow" />
   <meta name="theme-color" content="#0b1020" />
   <meta name="google-site-verification" content="NnQtIlIwbBbwkulIv1HM9y_Sw0bRdRFb0nWIsxOfPuE" />
-
   <link rel="canonical" href="https://www.autopartesvences.com/" />
 
-  <!-- Logo / favicon para navegador y Google -->
   <link rel="icon" type="image/jpeg" href="imagenes/logo-vences.jpeg" />
   <link rel="shortcut icon" type="image/jpeg" href="imagenes/logo-vences.jpeg" />
   <link rel="apple-touch-icon" href="imagenes/logo-vences.jpeg" />
 
-  <!-- Vista previa al compartir por WhatsApp, Facebook, etc. -->
   <meta property="og:site_name" content="AUTOPARTES VENCES" />
   <meta property="og:title" content="AUTOPARTES VENCES | Autopartes usadas originales" />
   <meta property="og:description" content="Catálogo digital de autopartes usadas originales con fotos reales, búsqueda por marca/modelo/año y atención por WhatsApp." />
@@ -30,7 +27,6 @@
   <meta name="twitter:description" content="Catálogo digital de autopartes usadas originales con fotos reales y atención por WhatsApp." />
   <meta name="twitter:image" content="https://www.autopartesvences.com/imagenes/logo-vences.jpeg" />
 
-  <!-- Datos de negocio para Google -->
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
@@ -39,7 +35,7 @@
     "url": "https://www.autopartesvences.com/",
     "logo": "https://www.autopartesvences.com/imagenes/logo-vences.jpeg",
     "image": "https://www.autopartesvences.com/imagenes/logo-vences.jpeg",
-    "description": "Catálogo digital de autopartes usadas originales con atención directa por WhatsApp.",
+    "description": "Catálogo digital de autopartes usadas originales con fotos reales y atención directa por WhatsApp.",
     "telephone": "+52 56 3275 3982",
     "address": {
       "@type": "PostalAddress",
@@ -59,267 +55,236 @@
   }
   </script>
 
-  <link rel="stylesheet" href="style-pro-v7.css?v=18" />
-  <link rel="stylesheet" href="motor-extra.css?v=1" />
+  <link rel="stylesheet" href="style-v2.css?v=3" />
 </head>
-
 <body>
-  <header class="topbar" id="inicio">
-    <div class="container topbar-inner">
-      <p>Autopartes disponibles · Fotos reales · Carrito por WhatsApp</p>
-      <a href="https://wa.me/525632753982" target="_blank" rel="noopener">
-        WhatsApp: +52 563 275 3982
-      </a>
+  <header class="top-strip">
+    <div class="container top-strip-inner">
+      <span>Autopartes disponibles · Fotos reales · Cotización por WhatsApp</span>
+      <a href="https://wa.me/525632753982" target="_blank" rel="noopener">WhatsApp: +52 563 275 3982</a>
     </div>
   </header>
 
-  <nav class="navbar">
+  <nav class="nav">
     <div class="container nav-inner">
-      <a class="brand" href="#inicio" aria-label="AUTOPARTES VENCES inicio">
+      <a class="brand" href="#inicio" aria-label="Inicio AUTOPARTES VENCES">
         <img src="imagenes/logo-vences.jpeg" alt="Logo AUTOPARTES VENCES" />
         <span>AUTOPARTES VENCES</span>
       </a>
-
-      <button class="menu-toggle" id="menuToggle" type="button" aria-label="Abrir menú">
-        ☰
-      </button>
-
+      <button class="menu-btn" id="menuBtn" type="button" aria-label="Abrir menú">☰</button>
       <div class="nav-links" id="navLinks">
         <a href="#catalogo">Catálogo</a>
         <a href="#ventajas">Ventajas</a>
-        <a href="#como-comprar">Cómo comprar</a>
+        <a href="#proceso">Cómo comprar</a>
         <button class="nav-cart" id="navCartBtn" type="button">Carrito <span id="navCartCount">0</span></button>
-        <a class="nav-cta" href="https://wa.me/525632753982" target="_blank" rel="noopener">WhatsApp</a>
+        <a href="https://wa.me/525632753982" target="_blank" rel="noopener" class="nav-cta">WhatsApp</a>
       </div>
     </div>
   </nav>
 
-  <main>
+  <main id="inicio">
     <section class="hero">
       <div class="container hero-grid">
-        <div class="hero-content">
-          <span class="eyebrow">Catálogo digital de autopartes</span>
+        <div class="hero-copy">
+          <p class="eyebrow">Autopartes usadas originales · Fotos reales</p>
           <h1>Encuentra la pieza correcta sin perder tiempo.</h1>
-          <p>
-            Busca autopartes por marca, modelo, año o nombre de pieza. Revisa fotos reales, agrégalas al carrito y mándanos el pedido directo por WhatsApp.
-          </p>
-
+          <p class="hero-text">Busca por pieza, marca, modelo, año, lado o número de parte. Abre cada producto para revisar fotos, descripción y detalles antes de cotizar.</p>
           <div class="hero-actions">
-            <a class="btn primary" href="#catalogo">Explorar inventario</a>
-            <button class="btn secondary" id="compartirCatalogo" type="button">Compartir catálogo</button>
+            <a class="btn primary" href="#catalogo">Ver catálogo</a>
+            <button class="btn secondary" id="heroCartBtn" type="button">Ver carrito</button>
           </div>
-
-          <div class="trust-row">
-            <span>✓ Fotos reales</span>
-            <span>✓ Piezas usadas originales</span>
-            <span>✓ Envíos con cargo al cliente</span>
-          </div>
-
-          <div class="stats">
-            <div>
-              <strong id="statTotal">0</strong>
-              <span>Piezas publicadas</span>
-            </div>
-            <div>
-              <strong id="statMarcas">0</strong>
-              <span>Marcas disponibles</span>
-            </div>
-            <div>
-              <strong id="statFotos">0</strong>
-              <span>Fotos principales</span>
-            </div>
+          <div class="hero-stats" aria-label="Estadísticas del catálogo">
+            <div><strong id="statTotal">0</strong><span>Piezas</span></div>
+            <div><strong id="statMarcas">0</strong><span>Marcas</span></div>
+            <div><strong id="statConFotos">0</strong><span>Con fotos</span></div>
           </div>
         </div>
-
-        <div class="hero-card">
-          <div class="hero-card-label">Carrito inteligente</div>
-          <img src="imagenes/logo-vences.jpeg" alt="AUTOPARTES VENCES" />
-          <div class="hero-card-info">
-            <span>Compra más sencilla</span>
-            <strong>Agrega varias piezas y envía todo por WhatsApp</strong>
-            <p>Confirmamos disponibilidad, compatibilidad y envío antes de cerrar la venta.</p>
+        <div class="hero-panel">
+          <div class="panel-glow"></div>
+          <div class="hero-card">
+            <span class="mini-label">Motor nuevo</span>
+            <h2>Inventario conectado a Supabase</h2>
+            <p>Las piezas que subes en el admin aparecen aquí con fotos, filtros y carrito directo a WhatsApp.</p>
+            <div class="hero-card-grid">
+              <span>Galería</span>
+              <span>Detalles</span>
+              <span>Carrito</span>
+              <span>Filtros</span>
+            </div>
           </div>
         </div>
       </div>
     </section>
 
-    <section class="quick-search">
-      <div class="container quick-grid">
-        <div>
-          <span class="eyebrow">Búsqueda rápida</span>
-          <h2>Encuentra tu pieza rápido</h2>
-          <p>Filtra por marca, modelo y año para encontrar piezas compatibles sin dar mil vueltas.</p>
-        </div>
-
-        <div class="quick-features">
-          <div>
-            <b>Fotos reales</b>
-            <span>Toca la imagen y revisa detalles de la pieza.</span>
-          </div>
-          <div>
-            <b>Carrito por WhatsApp</b>
-            <span>Arma tu pedido y envíalo completo.</span>
-          </div>
-          <div>
-            <b>Atención rápida</b>
-            <span>Sin formularios raros, directo al vendedor.</span>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section class="catalog-section" id="catalogo">
+    <section class="catalog" id="catalogo">
       <div class="container">
         <div class="section-head">
-          <span class="eyebrow">Autopartes disponibles</span>
-          <h2>Encuentra tu autoparte</h2>
-          <p>Escribe una pieza o usa los filtros. Ejemplos: faro Chevrolet Cruze, calavera Equinox, rin Duster 2016.</p>
-        </div>
-
-        <div class="filters">
-          <label>
-            Buscar
-            <input id="busqueda" type="search" placeholder="Marca, modelo, año, pieza, lado..." autocomplete="off" />
-          </label>
-
-          <label>
-            Marca
-            <select id="filtroMarca">
-              <option value="">Todas</option>
-            </select>
-          </label>
-
-          <label>
-            Modelo
-            <select id="filtroModelo">
-              <option value="">Todos</option>
-            </select>
-          </label>
-
-          <label>
-            Año
-            <select id="filtroAnio">
-              <option value="">Todos</option>
-            </select>
-          </label>
-
-          <button id="limpiarFiltros" type="button">Limpiar</button>
-        </div>
-
-        <div class="catalog-toolbar">
-          <p id="contador">Cargando inventario...</p>
-          <div class="category-chips" id="chipsCategorias">
-            <button type="button" data-chip="">Todo</button>
-            <button type="button" data-chip="faro">Faros</button>
-            <button type="button" data-chip="calavera">Calaveras</button>
-            <button type="button" data-chip="puerta">Puertas</button>
-            <button type="button" data-chip="rin">Rines</button>
+          <div>
+            <p class="eyebrow dark">Catálogo</p>
+            <h2>Inventario disponible</h2>
+          </div>
+          <div class="section-actions">
+            <button class="btn ghost" id="clearFiltersBtn" type="button">Limpiar filtros</button>
+            <button class="btn ghost" id="refreshBtn" type="button">Actualizar</button>
           </div>
         </div>
 
-        <div class="productos catalog-grid" id="productos">
-          <div class="loader">
-            <span></span>
-            Cargando inventario...
-          </div>
+        <div class="filters" aria-label="Filtros del catálogo">
+          <label class="search-field">
+            <span>Buscar</span>
+            <input id="searchInput" type="search" placeholder="Ej. faro, Beat, 2018, derecho, número de parte..." autocomplete="off" />
+          </label>
+          <label>
+            <span>Pieza</span>
+            <select id="piezaSelect"><option value="">Todas</option></select>
+          </label>
+          <label>
+            <span>Marca</span>
+            <select id="marcaSelect"><option value="">Todas</option></select>
+          </label>
+          <label>
+            <span>Modelo</span>
+            <select id="modeloSelect"><option value="">Todos</option></select>
+          </label>
+          <label>
+            <span>Año</span>
+            <select id="anioSelect"><option value="">Todos</option></select>
+          </label>
+          <label>
+            <span>Lado</span>
+            <select id="ladoSelect"><option value="">Todos</option></select>
+          </label>
         </div>
 
-        <div class="not-found-card">
-          <h3>No apareció esa pieza todavía.</h3>
-          <p>Escríbenos por WhatsApp con marca, modelo, año y la pieza que necesitas. Puede estar en inventario aunque todavía no salga filtrada.</p>
-          <a href="https://wa.me/525632753982?text=Hola,%20busco%20una%20autoparte%20que%20no%20aparece%20en%20el%20cat%C3%A1logo" target="_blank" rel="noopener">
-            Preguntar por WhatsApp
-          </a>
-        </div>
+        <div class="catalog-status" id="statusCatalogo">Cargando inventario...</div>
+        <div class="products-grid" id="productsGrid" aria-live="polite"></div>
       </div>
     </section>
 
-    <section class="benefits" id="ventajas">
-      <div class="container benefits-grid">
+    <section class="process" id="ventajas">
+      <div class="container process-grid">
         <article>
-          <span>01</span>
-          <h3>Inventario claro</h3>
-          <p>Consulta piezas disponibles con información lista para enviar al vendedor.</p>
-        </article>
-
-        <article>
-          <span>02</span>
+          <span>✓</span>
           <h3>Fotos reales</h3>
-          <p>Toca la imagen principal para ver más detalles de la pieza.</p>
+          <p>Revisa el estado de la pieza antes de pedir cotización.</p>
         </article>
-
         <article>
-          <span>03</span>
-          <h3>Búsqueda precisa</h3>
-          <p>Filtra por marca, modelo y año para encontrar opciones compatibles.</p>
+          <span>✓</span>
+          <h3>Búsqueda rápida</h3>
+          <p>Filtra por marca, modelo, año, lado, pieza o número de parte.</p>
         </article>
-
         <article>
-          <span>04</span>
-          <h3>Carrito práctico</h3>
-          <p>Agrega varias piezas y manda el pedido completo por WhatsApp.</p>
+          <span>✓</span>
+          <h3>WhatsApp directo</h3>
+          <p>El carrito arma el mensaje con los datos de cada autoparte.</p>
         </article>
       </div>
     </section>
 
-    <section class="steps" id="como-comprar">
-      <div class="container">
-        <div class="section-head light">
-          <span class="eyebrow">Proceso de compra</span>
-          <h2>Compra fácil y rápido</h2>
-        </div>
-
-        <div class="steps-grid">
-          <div>
-            <span>1</span>
-            <h3>Elige tu pieza</h3>
-            <p>Busca por marca, modelo, año, lado, color o número de parte.</p>
-          </div>
-
-          <div>
-            <span>2</span>
-            <h3>Agrega al carrito</h3>
-            <p>Abre la ficha de la pieza y mándala al carrito en un toque.</p>
-          </div>
-
-          <div>
-            <span>3</span>
-            <h3>Envía por WhatsApp</h3>
-            <p>Confirmamos disponibilidad, compatibilidad y costo de envío antes de cerrar la venta.</p>
-          </div>
-        </div>
+    <section class="process" id="proceso">
+      <div class="container process-grid">
+        <article>
+          <span>1</span>
+          <h3>Busca tu pieza</h3>
+          <p>Usa los filtros o escribe lo que necesitas.</p>
+        </article>
+        <article>
+          <span>2</span>
+          <h3>Abre el producto</h3>
+          <p>Revisa fotos, descripción, número de parte y detalles.</p>
+        </article>
+        <article>
+          <span>3</span>
+          <h3>Envía tu carrito</h3>
+          <p>Cotiza una o varias piezas en un solo mensaje.</p>
+        </article>
       </div>
     </section>
   </main>
 
-  <footer class="site-footer">
-    <div class="container footer-grid">
-      <div>
-        <a class="brand footer-brand" href="#inicio">
-          <img src="imagenes/logo-vences.jpeg" alt="Logo AUTOPARTES VENCES" />
-          <span>AUTOPARTES VENCES</span>
-        </a>
-        <p>Catálogo digital de autopartes disponibles con carrito por WhatsApp.</p>
-      </div>
-
-      <div>
-        <h3>Contacto</h3>
-        <a href="https://wa.me/525632753982" target="_blank" rel="noopener">WhatsApp: +52 563 275 3982</a>
-        <p>Estado de México, México</p>
-      </div>
+  <footer class="footer">
+    <div class="container footer-inner">
+      <strong>AUTOPARTES VENCES</strong>
+      <span>Catálogo digital conectado al motor de publicaciones</span>
     </div>
   </footer>
 
-  <a class="whatsapp-float" href="https://wa.me/525632753982" target="_blank" rel="noopener" aria-label="Contactar por WhatsApp">
-    WA
-  </a>
+  <a class="whatsapp-float" href="https://wa.me/525632753982" target="_blank" rel="noopener" aria-label="Contactar por WhatsApp">WA</a>
+
+  <div class="detail-modal" id="detailModal" aria-hidden="true">
+    <button class="modal-backdrop" id="detailBackdrop" type="button" aria-label="Cerrar producto"></button>
+    <article class="detail-card" role="dialog" aria-modal="true" aria-labelledby="detailTitle">
+      <button class="modal-close" id="detailClose" type="button" aria-label="Cerrar">×</button>
+      <div class="detail-gallery">
+        <button class="detail-image-wrap" id="detailImageBtn" type="button" aria-label="Cambiar foto">
+          <img id="detailImage" src="" alt="Foto de autoparte" />
+          <span id="detailPhotoCount"></span>
+        </button>
+        <div class="thumbs" id="detailThumbs"></div>
+      </div>
+      <div class="detail-info">
+        <div class="product-topline">
+          <span class="tag" id="detailId"></span>
+          <span class="tag status-tag" id="detailStatus"></span>
+        </div>
+        <h2 id="detailTitle"></h2>
+        <p class="detail-meta" id="detailMeta"></p>
+        <strong class="detail-price" id="detailPrice"></strong>
+        <p class="detail-description" id="detailDescription"></p>
+        <dl class="detail-list" id="detailList"></dl>
+        <div class="detail-actions">
+          <a class="whatsapp-btn" id="detailWhatsapp" target="_blank" rel="noopener">Cotizar por WhatsApp</a>
+          <button class="btn secondary" id="detailAddCart" type="button">Agregar al carrito</button>
+        </div>
+      </div>
+    </article>
+  </div>
+
+  <aside class="cart-panel" id="cartPanel" aria-hidden="true">
+    <button class="cart-backdrop" id="cartBackdrop" type="button" aria-label="Cerrar carrito"></button>
+    <div class="cart-drawer" role="dialog" aria-modal="true" aria-labelledby="cartTitle">
+      <div class="cart-head">
+        <div>
+          <span class="mini-label dark">Cotización</span>
+          <h2 id="cartTitle">Carrito de autopartes</h2>
+        </div>
+        <button class="modal-close inside" id="cartClose" type="button" aria-label="Cerrar carrito">×</button>
+      </div>
+      <div class="cart-items" id="cartItems"></div>
+      <div class="cart-footer">
+        <button class="btn ghost" id="clearCartBtn" type="button">Vaciar</button>
+        <a class="btn primary" id="cartWhatsapp" target="_blank" rel="noopener">Enviar por WhatsApp</a>
+      </div>
+    </div>
+  </aside>
+
+  <template id="productTemplate">
+    <article class="product-card" tabindex="0">
+      <button class="product-photo" type="button">
+        <img alt="" loading="lazy" />
+        <span class="photo-count"></span>
+      </button>
+      <div class="product-body">
+        <div class="product-topline">
+          <span class="tag id-tag"></span>
+          <span class="tag status-tag"></span>
+        </div>
+        <h3></h3>
+        <p class="meta"></p>
+        <dl class="details"></dl>
+        <div class="price-row">
+          <strong class="price"></strong>
+          <div class="card-actions">
+            <button class="btn small view-btn" type="button">Ver detalles</button>
+            <button class="btn small cart-btn" type="button">Agregar</button>
+          </div>
+        </div>
+      </div>
+    </article>
+  </template>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js?v=2"></script>
-  <script src="catalogo-supabase.js?v=1"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="supabase-config.js?v=2"></script>
-<script src="catalogo-supabase.js?v=2"></script>
-<script src="script-pro-v7.js?v=19"></script>
+  <script src="app-v2.js?v=3"></script>
 </body>
 </html>
