@@ -4,8 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <title>AUTOPARTES VENCES | Catálogo digital de autopartes usadas originales</title>
-  <meta name="description" content="Catálogo digital de AUTOPARTES VENCES. Busca autopartes usadas originales por pieza, marca, modelo, año, lado o número de parte. Ubicados en Ecatepec, Estado de México, con fotos reales y cotización directa por WhatsApp." />
+  <title>AUTOPARTES VENCES | Autopartes usadas originales en Ecatepec</title>
+  <meta name="description" content="AUTOPARTES VENCES: catálogo digital de autopartes usadas originales en Ecatepec, Estado de México. Busca por pieza, marca, modelo, año, lado o número de parte; cotiza por WhatsApp." />
   <meta name="robots" content="index, follow" />
   <meta name="theme-color" content="#0b1020" />
   <meta name="google-site-verification" content="NnQtIlIwbBbwkulIv1HM9y_Sw0bRdRFb0nWIsxOfPuE" />
@@ -16,14 +16,14 @@
   <link rel="apple-touch-icon" href="imagenes/logo-vences.jpeg" />
 
   <meta property="og:site_name" content="AUTOPARTES VENCES" />
-  <meta property="og:title" content="AUTOPARTES VENCES | Autopartes usadas originales" />
+  <meta property="og:title" content="AUTOPARTES VENCES | Autopartes usadas originales en Ecatepec" />
   <meta property="og:description" content="Catálogo digital de autopartes usadas originales en Ecatepec, Estado de México, con fotos reales, búsqueda por marca/modelo/año y atención por WhatsApp." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://www.autopartesvences.com/" />
   <meta property="og:image" content="https://www.autopartesvences.com/imagenes/logo-vences.jpeg" />
 
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="AUTOPARTES VENCES | Autopartes usadas originales" />
+  <meta name="twitter:title" content="AUTOPARTES VENCES | Autopartes usadas originales en Ecatepec" />
   <meta name="twitter:description" content="Catálogo digital de autopartes usadas originales en Ecatepec, Estado de México, con fotos reales y atención por WhatsApp." />
   <meta name="twitter:image" content="https://www.autopartesvences.com/imagenes/logo-vences.jpeg" />
 
@@ -57,7 +57,7 @@
   }
   </script>
 
-  <link rel="stylesheet" href="style-v2.css?v=6" />
+  <link rel="stylesheet" href="style-v2.css?v=7" />
 </head>
 <body>
   <header class="top-strip">
@@ -89,25 +89,36 @@
     <section class="hero">
       <div class="container hero-grid">
         <div class="hero-copy">
-          <p class="eyebrow">Autopartes usadas originales · Listas para cotizar</p>
-          <h1>Encuentra autopartes originales sin dar vueltas.</h1>
-          <p class="hero-text">Explora piezas disponibles con fotos reales, precio, ID y datos de compatibilidad. Estamos ubicados en Ecatepec, Estado de México; agrega al carrito y manda tu cotización directo por WhatsApp.</p>
+          <p class="eyebrow">Autopartes usadas originales · Ecatepec, Estado de México</p>
+          <h1>Encuentra la pieza correcta sin perder todo el día.</h1>
+          <p class="hero-text">Catálogo digital de autopartes usadas originales con fotos reales, precio, ID y datos de compatibilidad. Revisa, agrega al carrito y cotiza directo por WhatsApp con un negocio local en Ecatepec.</p>
           <div class="hero-actions">
-            <a class="btn primary" href="#catalogo">Explorar catálogo</a>
+            <a class="btn primary" href="#catalogo">Ver piezas disponibles</a>
             <button class="btn secondary" id="heroCartBtn" type="button">Cotizar carrito</button>
           </div>
+          <div class="trust-pills" aria-label="Datos rápidos de confianza">
+            <span>Local establecido</span>
+            <span>Fotos reales</span>
+            <span>Pago en Ecatepec</span>
+          </div>
           <div class="hero-stats" aria-label="Estadísticas del catálogo">
-            <div><strong id="statTotal">0</strong><span>Piezas</span></div>
-            <div><strong id="statMarcas">0</strong><span>Marcas</span></div>
-            <div><strong id="statConFotos">0</strong><span>Con fotos</span></div>
+            <div><strong id="statTotal" class="stat-loading">Cargando</strong><span>Piezas disponibles</span></div>
+            <div><strong id="statMarcas" class="stat-loading">Cargando</strong><span>Marcas cargadas</span></div>
+            <div><strong id="statConFotos" class="stat-loading">Cargando</strong><span>Con fotos reales</span></div>
           </div>
         </div>
         <div class="hero-panel">
           <div class="panel-glow"></div>
+          <div class="garage-visual" aria-hidden="true">
+            <div class="garage-topline"><span>AV</span><em>Inventario activo</em></div>
+            <div class="garage-part main-part">FAROS</div>
+            <div class="garage-part">PUERTAS</div>
+            <div class="garage-part">DEFENSAS</div>
+          </div>
           <div class="hero-card">
             <span class="mini-label">Atención rápida</span>
             <h2>Piezas verificadas listas para cotizar</h2>
-            <p>Revisa el estado, precio e ID de cada autoparte. Confirmamos compatibilidad y disponibilidad antes de cerrar la venta.</p>
+            <p>Revisa estado, precio e ID de cada autoparte. Confirmamos compatibilidad, disponibilidad y forma de pago antes de cerrar la venta.</p>
             <div class="hero-card-grid">
               <span>Fotos reales</span>
               <span>ID de pieza</span>
@@ -128,7 +139,7 @@
           </div>
           <div class="section-actions">
             <button class="btn ghost" id="clearFiltersBtn" type="button">Limpiar</button>
-            <button class="btn ghost" id="refreshBtn" type="button">Recargar piezas</button>
+            <button class="btn ghost" id="refreshBtn" type="button">Actualizar resultados</button>
           </div>
         </div>
 
@@ -159,6 +170,10 @@
           </label>
         </div>
 
+        <div class="catalog-helper">
+          <span>Tip: escribe modelo, pieza o año. Ejemplo: “Beat puerta 2021”.</span>
+          <span>Solo mostramos piezas disponibles.</span>
+        </div>
         <div class="catalog-status" id="statusCatalogo">Cargando inventario...</div>
         <div class="products-grid" id="productsGrid" aria-live="polite"></div>
       </div>
@@ -174,17 +189,17 @@
         </div>
         <div class="process-grid">
         <article>
-          <span>✓</span>
+          <span>📸</span>
           <h3>Fotos reales de cada pieza</h3>
           <p>Observa el estado físico antes de pedir cotización.</p>
         </article>
         <article>
-          <span>✓</span>
+          <span>🔎</span>
           <h3>Búsqueda por auto y pieza</h3>
           <p>Encuentra más rápido por marca, modelo, año, lado o número de parte.</p>
         </article>
         <article>
-          <span>✓</span>
+          <span>💬</span>
           <h3>Cotización por WhatsApp</h3>
           <p>Envía una o varias piezas en un solo mensaje, con ID y precio.</p>
         </article>
@@ -225,6 +240,14 @@
         <div class="payments-note">
           <strong>Importante:</strong> estamos en Ecatepec, Estado de México. No hagas pagos hasta confirmar disponibilidad por WhatsApp.
         </div>
+        <div class="local-trust-card">
+          <div>
+            <span class="mini-label dark">Negocio local</span>
+            <h3>Atención en local establecido</h3>
+            <p>Antes de cerrar cualquier venta te confirmamos existencia, compatibilidad, estado de la pieza y forma de pago. Así compras con más seguridad y sin vueltas innecesarias.</p>
+          </div>
+          <a class="btn primary" href="https://wa.me/525632753982" target="_blank" rel="noopener">Preguntar por WhatsApp</a>
+        </div>
       </div>
     </section>
 
@@ -239,18 +262,18 @@
         <div class="process-grid">
         <article>
           <span>1</span>
-          <h3>Encuentra</h3>
-          <p>Usa los filtros o escribe la pieza que necesitas.</p>
+          <h3>Busca tu pieza</h3>
+          <p>Filtra por pieza, marca, modelo, año o lado para llegar más rápido.</p>
         </article>
         <article>
           <span>2</span>
-          <h3>Revisa</h3>
-          <p>Abre el producto para ver fotos, estado, número de parte y precio.</p>
+          <h3>Revisa detalles</h3>
+          <p>Abre la ficha para ver fotos, estado, número de parte, ID y precio.</p>
         </article>
         <article>
           <span>3</span>
-          <h3>Cotiza</h3>
-          <p>Agrega al carrito y manda todo directo por WhatsApp.</p>
+          <h3>Cotiza seguro</h3>
+          <p>Envía el carrito por WhatsApp y confirma disponibilidad antes de pagar.</p>
         </article>
         </div>
       </div>
@@ -323,6 +346,7 @@
 
   <template id="productTemplate">
     <article class="product-card" tabindex="0">
+      <div class="product-ribbon">Disponible</div>
       <button class="product-photo" type="button">
         <img alt="" loading="lazy" />
         <span class="photo-count"></span>
@@ -347,8 +371,17 @@
   </template>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <noscript>
+    <section class="noscript-seo">
+      <div class="container">
+        <h2>Catálogo de autopartes usadas originales en Ecatepec</h2>
+        <p>AUTOPARTES VENCES ofrece autopartes usadas originales con fotos reales, precio, ID de pieza y cotización por WhatsApp. Para ver el inventario completo activa JavaScript o contáctanos directamente.</p>
+      </div>
+    </section>
+  </noscript>
+
   <script src="supabase-config.js?v=2"></script>
-  <script src="app-v2.js?v=6"></script>
+  <script src="app-v2.js?v=7"></script>
 </body>
 </html>
 
