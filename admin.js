@@ -1,7 +1,7 @@
 /* AUTOPARTES VENCES - Admin privado
    Requiere supabase-config.js y admin.html */
 
-const supabase = window.autopartesSupabase;
+const avDB = window.autopartesSupabase;
 const bucket = window.AV_CONFIG?.STORAGE_BUCKET || "fotos-piezas";
 
 let piezas = [];
@@ -79,7 +79,7 @@ function datosFormulario() {
 }
 
 async function verificarSupabase() {
-  if (!supabase) {
+  if (!avDB) {
     $("loginStatus").innerHTML = "Falta configurar <b>supabase-config.js</b> con tu URL y anon key.";
     $("loginStatus").className = "status err";
     return false;
@@ -90,7 +90,7 @@ async function verificarSupabase() {
 async function verificarSesion() {
   if (!(await verificarSupabase())) return;
 
-  const { data } = await supabase.auth.getSession();
+  const { data } = await avDB.auth.getSession();
   if (data.session) {
     mostrarAdmin();
     await cargarPiezas();
@@ -117,7 +117,7 @@ async function iniciarSesion(event) {
   const email = $("loginEmail").value.trim();
   const password = $("loginPassword").value;
 
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  const { error } = await avDB.auth.signInWithPassword({ email, password });
 
   if (error) {
     setStatus("loginStatus", "No se pudo entrar: " + error.message, "err");
@@ -130,7 +130,7 @@ async function iniciarSesion(event) {
 }
 
 async function cerrarSesion() {
-  await supabase.auth.signOut();
+  await avDB.auth.signOut();
   mostrarLogin();
 }
 
@@ -274,10 +274,10 @@ async function eliminarPieza(p) {
 
   const paths = (p.fotos || []).map((f) => f.storage_path).filter(Boolean);
   if (paths.length) {
-    await supabase.storage.from(bucket).remove(paths);
+    await avDB.storage.from(bucket).remove(paths);
   }
 
-  const { error } = await supabase.from("piezas").delete().eq("id", p.id);
+  const { error } = await avDB.from("piezas").delete().eq("id", p.id);
 
   if (error) {
     setStatus("tableStatus", "Error eliminando: " + error.message, "err");
@@ -354,7 +354,7 @@ async function subirFotos(piezaId, archivos) {
     const extension = file.name.includes(".") ? file.name.split(".").pop().toLowerCase() : "jpg";
     const path = `${piezaId}/${Date.now()}-${i + 1}-${slug(file.name)}.${extension}`;
 
-    const { error: uploadError } = await supabase.storage
+    const { error: uploadError } = await avDB.storage
       .from(bucket)
       .upload(path, file, {
         cacheControl: "3600",
@@ -364,10 +364,10 @@ async function subirFotos(piezaId, archivos) {
 
     if (uploadError) throw uploadError;
 
-    const { data: publicData } = supabase.storage.from(bucket).getPublicUrl(path);
+    const { data: publicData } = avDB.storage.from(bucket).getPublicUrl(path);
     const url = publicData.publicUrl;
 
-    const { error: insertFotoError } = await supabase.from("fotos").insert({
+    const { error: insertFotoError } = await avDB.from("fotos").insert({
       pieza_id: piezaId,
       url,
       storage_path: path,
@@ -496,16 +496,16 @@ async function importarExcel(event) {
         if (buscarError) throw buscarError;
 
         if (existente) {
-          const { error } = await supabase.from("piezas").update(item).eq("id", existente.id);
+          const { error } = await avDB.from("piezas").update(item).eq("id", existente.id);
           if (error) throw error;
           actualizadas++;
         } else {
-          const { error } = await supabase.from("piezas").insert(item);
+          const { error } = await avDB.from("piezas").insert(item);
           if (error) throw error;
           creadas++;
         }
       } else {
-        const { error } = await supabase.from("piezas").insert(item);
+        const { error } = await avDB.from("piezas").insert(item);
         if (error) throw error;
         creadas++;
       }
@@ -570,3 +570,4 @@ document.addEventListener("DOMContentLoaded", async () => {
   registrarEventos();
   await verificarSesion();
 });
+
