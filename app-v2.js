@@ -80,10 +80,10 @@
   }
 
   async function cargarInventario() {
-    setStatus("Cargando inventario...", "");
+    setStatus("Cargando piezas disponibles...", "");
 
     if (!db) {
-      setStatus("No se encontró la conexión con Supabase. Revisa supabase-config.js.", "err");
+      setStatus("No pudimos cargar el inventario. Escríbenos por WhatsApp para revisar disponibilidad.", "err");
       mostrarProductos([]);
       return;
     }
@@ -271,9 +271,15 @@
   }
 
   function actualizarStats(lista) {
-    id("statTotal").textContent = lista.length;
-    id("statMarcas").textContent = valoresUnicos(lista, "marca").length;
-    id("statConFotos").textContent = lista.filter((p) => p.fotos.length).length;
+    const total = id("statTotal");
+    const marcas = id("statMarcas");
+    const fotos = id("statConFotos");
+
+    if (total) total.textContent = lista.length;
+    if (marcas) marcas.textContent = valoresUnicos(lista, "marca").length;
+    if (fotos) fotos.textContent = lista.filter((p) => p.fotos.length).length;
+
+    [total, marcas, fotos].forEach((el) => el?.classList.remove("stat-loading"));
   }
 
   function mostrarProductos(lista) {
@@ -291,8 +297,8 @@
     if (!total) {
       grid.innerHTML = `
         <div class="empty">
-          <h3>No hay piezas para mostrar</h3>
-          <p>Sube piezas desde el panel admin o revisa los filtros.</p>
+          <h3>No encontramos piezas con esos filtros</h3>
+          <p>Prueba con otra búsqueda o escríbenos por WhatsApp para revisar disponibilidad.</p>
         </div>`;
       actualizarBotonCargarMas(0, 0);
       setStatus("No hay resultados con esos filtros.", "");
@@ -392,8 +398,8 @@
     }
 
     wrap.hidden = false;
-    boton.textContent = `Cargar ${Math.min(PAGE_SIZE, restantes)} piezas más`;
-    boton.setAttribute("aria-label", `Cargar más piezas. Faltan ${restantes}.`);
+    boton.textContent = `Ver ${Math.min(PAGE_SIZE, restantes)} piezas más`;
+    boton.setAttribute("aria-label", `Ver más piezas. Faltan ${restantes}.`);
   }
 
   function obtenerBotonCargarMas() {
@@ -411,7 +417,7 @@
     boton.id = "loadMoreBtn";
     boton.type = "button";
     boton.className = "btn primary load-more-btn";
-    boton.textContent = "Cargar más piezas";
+    boton.textContent = "Ver más piezas";
     boton.addEventListener("click", () => {
       piezasVisibles += PAGE_SIZE;
       mostrarProductos(filtrados);
