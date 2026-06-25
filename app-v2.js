@@ -428,7 +428,8 @@
       `Número de parte: ${p.numeroParte || "N/A"}`,
       `Precio: ${formatearPrecio(p.precio)}`,
       "",
-      "¿Me puedes confirmar disponibilidad y compatibilidad?"
+      "Entiendo que están ubicados en Ecatepec, Estado de México.",
+      "¿Me puedes confirmar disponibilidad, compatibilidad y forma de pago?"
     ].join("\n");
     return `https://wa.me/${WHATSAPP}?text=${encodeURIComponent(mensaje)}`;
   }
@@ -500,7 +501,8 @@
       lineas.push(`No. parte: ${p.numeroParte || "N/A"}`);
       lineas.push("");
     });
-    lineas.push("¿Me puedes confirmar disponibilidad y compatibilidad?");
+    lineas.push("Entiendo que están ubicados en Ecatepec, Estado de México.");
+    lineas.push("¿Me puedes confirmar disponibilidad, compatibilidad y forma de pago?");
     return `https://wa.me/${WHATSAPP}?text=${encodeURIComponent(lineas.join("\n"))}`;
   }
 
