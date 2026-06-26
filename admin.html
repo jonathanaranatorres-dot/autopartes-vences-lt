@@ -489,14 +489,14 @@
             <small id="sessionRole">Verificando usuario</small>
           </div>
           <a class="btn" href="index.html" target="_blank" rel="noopener">Abrir catálogo</a>
-          <button id="exportExcel" class="btn gold" type="button">Exportar Excel</button>
+          <button id="exportExcel" class="btn gold admin-only" type="button">Exportar Excel</button>
           <button id="logoutBtn" class="btn danger" type="button">Salir</button>
         </div>
       </div>
     </header>
 
     <div class="wrap grid">
-      <section class="panel">
+      <section class="panel admin-only">
         <h2 id="formTitle">Nueva pieza</h2>
         <p class="hint">Llena los datos, arrastra fotos y guarda. La publicación se prepara sin que tengas que tocar código.</p>
 
@@ -652,5 +652,34 @@
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="supabase-config.js"></script>
   <script src="admin.js?v=paso-1c-perfiles"></script>
+  <script>
+  function aplicarVistaPorRol() {
+    const roleEl = document.getElementById("sessionRole");
+    const rol = (roleEl?.textContent || "").trim().toLowerCase();
+
+    const esAdmin = rol.includes("admin");
+
+    document.querySelectorAll(".admin-only").forEach((el) => {
+      el.style.display = esAdmin ? "" : "none";
+    });
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    aplicarVistaPorRol();
+
+    const roleEl = document.getElementById("sessionRole");
+    if (roleEl) {
+      const observer = new MutationObserver(aplicarVistaPorRol);
+      observer.observe(roleEl, {
+        childList: true,
+        characterData: true,
+        subtree: true
+      });
+    }
+
+    setTimeout(aplicarVistaPorRol, 500);
+    setTimeout(aplicarVistaPorRol, 1500);
+  });
+</script>
 </body>
 </html>
