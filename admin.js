@@ -68,12 +68,11 @@ function inicioMesActualISO() {
 }
 
 function nombreDesdeEmail(email) {
-  return String(email || "")
-    .split("@")[0]
+  const base = String(email || "").split("@")[0] || "Usuario";
+  return base
     .replace(/[._-]+/g, " ")
-    .replace(/\w/g, (letra) => letra.toUpperCase()) || "Usuario";
+    .replace(/\w/g, (letra) => letra.toUpperCase());
 }
-
 function nombreUsuarioActual() {
   return perfilActual?.nombre || usuarioActual?.user_metadata?.name || nombreDesdeEmail(usuarioActual?.email);
 }
@@ -139,51 +138,66 @@ async function cargarPerfilActual() {
   perfilActual = null;
   if (!usuarioActual) return;
 
-  if (extrasDisponibles.perfiles) {
-    const perfilBase = {
-      id: usuarioActual.id,
-      email: usuarioActual.email,
-      nombre: usuarioActual.user_metadata?.name || nombreDesdeEmail(usuarioActual.email),
-      rol: "vendedor",
-      activo: true,
-      updated_at: new Date().toISOString()
-    };
+  const perfilBase = {
+    id: usuarioActual.id,
+    email: usuarioActual.email,
+    nombre: usuarioActual.user_metadata?.name || nombreDesdeEmail(usuarioActual.email),
+    rol: "vendedor",
+    activo: true,
+    updated_at: new Date().toISOString()
+  };
 
+  if (extrasDisponibles.perfiles) {
     try {
-      const { data } = await avDB
+      // 1) Búsqueda principal por UID de Supabase Auth.
+      const { data: porId, error: errorId } = await avDB
         .from("perfiles")
         .select("id, nombre, email, rol, activo")
         .eq("id", usuarioActual.id)
         .maybeSingle();
 
-      if (data) {
-        perfilActual = data;
-      } else {
-        const { data: creado } = await avDB
+      if (errorId) console.warn("No se pudo leer perfil por ID:", errorId.message);
+
+      if (porId) {
+        perfilActual = porId;
+      }
+
+      // 2) Respaldo por correo. Esto ayuda si el perfil se capturó bien en tabla,
+      // pero el navegador todavía no está cruzando el UID como esperamos.
+      if (!perfilActual && usuarioActual.email) {
+        const { data: porEmail, error: errorEmail } = await avDB
+          .from("perfiles")
+          .select("id, nombre, email, rol, activo")
+          .eq("email", usuarioActual.email)
+          .maybeSingle();
+
+        if (errorEmail) console.warn("No se pudo leer perfil por email:", errorEmail.message);
+        if (porEmail) perfilActual = porEmail;
+      }
+
+      // 3) Si no existe perfil, crea uno básico para que el admin no se quede sin nombre.
+      if (!perfilActual) {
+        const { data: creado, error: errorCrear } = await avDB
           .from("perfiles")
           .insert(perfilBase)
           .select("id, nombre, email, rol, activo")
           .single();
+
+        if (errorCrear) console.warn("No se pudo crear perfil básico:", errorCrear.message);
         perfilActual = creado || perfilBase;
       }
-    } catch (_) {
+    } catch (error) {
+      console.warn("No se pudo cargar perfil. Se usará sesión básica:", error.message);
       perfilActual = perfilBase;
     }
   }
 
-  if (!perfilActual) {
-    perfilActual = {
-      id: usuarioActual.id,
-      email: usuarioActual.email,
-      nombre: usuarioActual.user_metadata?.name || nombreDesdeEmail(usuarioActual.email),
-      rol: "vendedor",
-      activo: true
-    };
-  }
+  if (!perfilActual) perfilActual = perfilBase;
 
-  perfilesPorId.set(usuarioActual.id, perfilActual);
+  // Para ventas y movimientos usamos siempre el UID real de la sesión actual,
+  // aunque el perfil se haya encontrado por correo.
+  perfilesPorId.set(usuarioActual.id, { ...perfilActual, id: usuarioActual.id });
 }
-
 async function prepararSesionPrivada() {
   const { data } = await avDB.auth.getUser();
   usuarioActual = data?.user || null;
