@@ -7,6 +7,16 @@ const bucket = window.AV_CONFIG?.STORAGE_BUCKET || "fotos-piezas";
 let piezas = [];
 let archivosSeleccionados = [];
 let filtroTabla = "";
+let usuarioActual = null;
+let perfilActual = null;
+let perfilesPorId = new Map();
+let ventasMes = [];
+let extrasDisponibles = {
+  perfiles: false,
+  ventas: false,
+  movimientos: false,
+  auditoriaPiezas: false
+};
 
 const $ = (id) => document.getElementById(id);
 
@@ -39,6 +49,257 @@ function dinero(valor) {
     currency: "MXN",
     maximumFractionDigits: 0
   }).format(numero);
+}
+
+function fechaCorta(valor) {
+  if (!valor) return "";
+  const fecha = new Date(valor);
+  if (Number.isNaN(fecha.getTime())) return "";
+  return new Intl.DateTimeFormat("es-MX", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric"
+  }).format(fecha);
+}
+
+function inicioMesActualISO() {
+  const fecha = new Date();
+  return new Date(fecha.getFullYear(), fecha.getMonth(), 1).toISOString();
+}
+
+function nombreDesdeEmail(email) {
+  return String(email || "")
+    .split("@")[0]
+    .replace(/[._-]+/g, " ")
+    .replace(/\w/g, (letra) => letra.toUpperCase()) || "Usuario";
+}
+
+function nombreUsuarioActual() {
+  return perfilActual?.nombre || usuarioActual?.user_metadata?.name || nombreDesdeEmail(usuarioActual?.email);
+}
+
+function usuarioId() {
+  return usuarioActual?.id || null;
+}
+
+function usuarioEmail() {
+  return usuarioActual?.email || null;
+}
+
+function usuarioNombre() {
+  return nombreUsuarioActual();
+}
+
+function nombrePerfil(id, fallback = "") {
+  if (!id) return fallback || "";
+  const perfil = perfilesPorId.get(id);
+  return perfil?.nombre || nombreDesdeEmail(perfil?.email) || fallback || "Usuario";
+}
+
+function pintarUsuarioActual() {
+  const nombreEl = $("sessionName");
+  const roleEl = $("sessionRole");
+  if (nombreEl) nombreEl.textContent = usuarioActual ? usuarioNombre() : "Sin sesión";
+  if (roleEl) roleEl.textContent = usuarioActual ? (perfilActual?.rol || usuarioActual.email || "Usuario autorizado") : "Verificando usuario";
+}
+
+async function detectarExtras() {
+  extrasDisponibles = {
+    perfiles: false,
+    ventas: false,
+    movimientos: false,
+    auditoriaPiezas: false
+  };
+
+  try {
+    const { error } = await avDB.from("perfiles").select("id, nombre, email, rol").limit(1);
+    extrasDisponibles.perfiles = !error;
+  } catch (_) {}
+
+  try {
+    const { error } = await avDB.from("ventas").select("id").limit(1);
+    extrasDisponibles.ventas = !error;
+  } catch (_) {}
+
+  try {
+    const { error } = await avDB.from("movimientos_inventario").select("id").limit(1);
+    extrasDisponibles.movimientos = !error;
+  } catch (_) {}
+
+  try {
+    const { error } = await avDB
+      .from("piezas")
+      .select("creado_por, actualizado_por, actualizado_en, vendido_por, vendido_en, precio_venta, metodo_pago, nota_venta")
+      .limit(1);
+    extrasDisponibles.auditoriaPiezas = !error;
+  } catch (_) {}
+}
+
+async function cargarPerfilActual() {
+  perfilActual = null;
+  if (!usuarioActual) return;
+
+  if (extrasDisponibles.perfiles) {
+    const perfilBase = {
+      id: usuarioActual.id,
+      email: usuarioActual.email,
+      nombre: usuarioActual.user_metadata?.name || nombreDesdeEmail(usuarioActual.email),
+      rol: "vendedor",
+      activo: true,
+      updated_at: new Date().toISOString()
+    };
+
+    try {
+      const { data } = await avDB
+        .from("perfiles")
+        .select("id, nombre, email, rol, activo")
+        .eq("id", usuarioActual.id)
+        .maybeSingle();
+
+      if (data) {
+        perfilActual = data;
+      } else {
+        const { data: creado } = await avDB
+          .from("perfiles")
+          .insert(perfilBase)
+          .select("id, nombre, email, rol, activo")
+          .single();
+        perfilActual = creado || perfilBase;
+      }
+    } catch (_) {
+      perfilActual = perfilBase;
+    }
+  }
+
+  if (!perfilActual) {
+    perfilActual = {
+      id: usuarioActual.id,
+      email: usuarioActual.email,
+      nombre: usuarioActual.user_metadata?.name || nombreDesdeEmail(usuarioActual.email),
+      rol: "vendedor",
+      activo: true
+    };
+  }
+
+  perfilesPorId.set(usuarioActual.id, perfilActual);
+}
+
+async function prepararSesionPrivada() {
+  const { data } = await avDB.auth.getUser();
+  usuarioActual = data?.user || null;
+  await detectarExtras();
+  await cargarPerfilActual();
+  pintarUsuarioActual();
+}
+
+async function cargarPerfilesRelacionados() {
+  perfilesPorId = new Map(perfilActual?.id ? [[perfilActual.id, perfilActual]] : []);
+  if (!extrasDisponibles.perfiles) return;
+
+  const ids = [...new Set(piezas.flatMap((p) => [p.creado_por, p.actualizado_por, p.vendido_por]).filter(Boolean))];
+  if (!ids.length) return;
+
+  try {
+    const { data, error } = await avDB
+      .from("perfiles")
+      .select("id, nombre, email, rol")
+      .in("id", ids);
+    if (!error) {
+      (data || []).forEach((perfil) => perfilesPorId.set(perfil.id, perfil));
+    }
+  } catch (_) {}
+}
+
+function auditarPayload(payload, tipo = "actualizar") {
+  if (!extrasDisponibles.auditoriaPiezas || !usuarioId()) return payload;
+  const ahora = new Date().toISOString();
+  const auditado = { ...payload, actualizado_por: usuarioId(), actualizado_en: ahora };
+  if (tipo === "crear") auditado.creado_por = usuarioId();
+  return auditado;
+}
+
+async function registrarMovimiento(accion, pieza, detalle = {}) {
+  if (!extrasDisponibles.movimientos || !usuarioId()) return;
+  try {
+    await avDB.from("movimientos_inventario").insert({
+      pieza_id: pieza?.id || null,
+      folio: pieza?.folio || null,
+      pieza: pieza?.pieza || null,
+      accion,
+      detalle,
+      usuario_id: usuarioId(),
+      usuario_email: usuarioEmail(),
+      usuario_nombre: usuarioNombre()
+    });
+  } catch (error) {
+    console.warn("No se pudo registrar movimiento:", error.message);
+  }
+}
+
+async function registrarVenta(pieza, venta) {
+  if (!extrasDisponibles.ventas || !usuarioId()) return;
+  try {
+    await avDB.from("ventas").insert({
+      pieza_id: pieza.id,
+      folio: pieza.folio || null,
+      pieza: pieza.pieza || null,
+      marca: pieza.marca || null,
+      modelo: pieza.modelo || null,
+      anio: pieza.anio || null,
+      precio_lista: pieza.precio || null,
+      precio_venta: venta.precio_venta || pieza.precio || null,
+      metodo_pago: venta.metodo_pago || null,
+      nota: venta.nota || null,
+      vendedor_id: usuarioId(),
+      vendedor_email: usuarioEmail(),
+      vendedor_nombre: usuarioNombre(),
+      vendido_en: venta.vendido_en
+    });
+  } catch (error) {
+    console.warn("No se pudo registrar venta:", error.message);
+  }
+}
+
+async function cargarVentasMes() {
+  ventasMes = [];
+  const inicioMes = inicioMesActualISO();
+
+  if (extrasDisponibles.ventas) {
+    try {
+      const { data, error } = await avDB
+        .from("ventas")
+        .select("id, pieza_id, folio, pieza, precio_venta, metodo_pago, vendedor_id, vendedor_nombre, vendedor_email, vendido_en")
+        .gte("vendido_en", inicioMes)
+        .order("vendido_en", { ascending: false });
+      if (!error) ventasMes = data || [];
+      return;
+    } catch (_) {}
+  }
+
+  ventasMes = piezas
+    .filter((p) => !p.disponible && p.vendido_en && new Date(p.vendido_en).toISOString() >= inicioMes)
+    .map((p) => ({
+      pieza_id: p.id,
+      folio: p.folio,
+      pieza: p.pieza,
+      precio_venta: p.precio_venta || p.precio,
+      metodo_pago: p.metodo_pago,
+      vendedor_id: p.vendido_por,
+      vendedor_nombre: nombrePerfil(p.vendido_por, "Sin registrar"),
+      vendido_en: p.vendido_en
+    }));
+}
+
+function resumenVendedores() {
+  const mapa = new Map();
+  ventasMes.forEach((venta) => {
+    const nombre = venta.vendedor_nombre || nombrePerfil(venta.vendedor_id, nombreDesdeEmail(venta.vendedor_email)) || "Sin registrar";
+    const actual = mapa.get(nombre) || { nombre, piezas: 0, total: 0 };
+    actual.piezas += 1;
+    actual.total += Number(venta.precio_venta || 0);
+    mapa.set(nombre, actual);
+  });
+  return [...mapa.values()].sort((a, b) => b.total - a.total || b.piezas - a.piezas);
 }
 
 function limpiarFormulario() {
@@ -93,6 +354,7 @@ async function verificarSesion() {
   const { data } = await avDB.auth.getSession();
   if (data.session) {
     mostrarAdmin();
+    await prepararSesionPrivada();
     await cargarPiezas();
   } else {
     mostrarLogin();
@@ -126,11 +388,16 @@ async function iniciarSesion(event) {
 
   setStatus("loginStatus", "Listo.", "ok");
   mostrarAdmin();
+  await prepararSesionPrivada();
   await cargarPiezas();
 }
 
 async function cerrarSesion() {
   await avDB.auth.signOut();
+  usuarioActual = null;
+  perfilActual = null;
+  perfilesPorId = new Map();
+  pintarUsuarioActual();
   mostrarLogin();
 }
 
@@ -152,15 +419,65 @@ async function cargarPiezas() {
     fotos: [...(pieza.fotos || [])].sort((a, b) => (a.orden || 0) - (b.orden || 0))
   }));
 
+  await cargarPerfilesRelacionados();
+  await cargarVentasMes();
   pintarTabla();
   pintarStats();
+  pintarVentasResumen();
   setStatus("tableStatus", `${piezas.length} piezas cargadas.`, "ok");
 }
 
 function pintarStats() {
+  const totalMes = ventasMes.reduce((suma, venta) => suma + Number(venta.precio_venta || 0), 0);
+  const ranking = resumenVendedores();
+
   $("statTotal").textContent = piezas.length;
   $("statDisponibles").textContent = piezas.filter((p) => p.disponible).length;
   $("statFotos").textContent = piezas.filter((p) => p.fotos?.length).length;
+  if ($("statVendidasMes")) $("statVendidasMes").textContent = ventasMes.length;
+  if ($("statMontoMes")) $("statMontoMes").textContent = dinero(totalMes);
+  if ($("statMejorVendedor")) $("statMejorVendedor").textContent = ranking[0]?.nombre || "Sin ventas";
+}
+
+function pintarVentasResumen() {
+  const contenedor = $("ventasResumen");
+  if (!contenedor) return;
+
+  const ranking = resumenVendedores();
+  if (!ventasMes.length) {
+    contenedor.innerHTML = `<p class="empty-state">Todavía no hay ventas registradas este mes.</p>`;
+    return;
+  }
+
+  contenedor.innerHTML = `
+    <div class="sales-grid">
+      ${ranking.map((vendedor) => `
+        <article class="seller-card">
+          <strong>${escapeHtml(vendedor.nombre)}</strong>
+          <span>${vendedor.piezas} pieza(s) vendida(s)</span>
+          <b>${dinero(vendedor.total)}</b>
+        </article>
+      `).join("")}
+    </div>
+    <div class="mini-sales-list">
+      ${ventasMes.slice(0, 8).map((venta) => `
+        <div class="sale-row">
+          <span>${escapeHtml(venta.folio || "S/F")} · ${escapeHtml(venta.pieza || "Pieza")}</span>
+          <strong>${dinero(venta.precio_venta)}</strong>
+          <small>${escapeHtml(venta.vendedor_nombre || nombreDesdeEmail(venta.vendedor_email))} · ${fechaCorta(venta.vendido_en)}</small>
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
+
+function textoVentaPieza(p) {
+  if (p.disponible) return `<span style="color:var(--muted)">Sin venta</span>`;
+  const vendedor = p.vendido_por ? nombrePerfil(p.vendido_por, "Vendedor") : "Sin registrar";
+  const fecha = fechaCorta(p.vendido_en);
+  const precio = p.precio_venta ? dinero(p.precio_venta) : "";
+  const metodo = p.metodo_pago ? ` · ${escapeHtml(p.metodo_pago)}` : "";
+  return `<strong>${escapeHtml(vendedor)}</strong><br><span style="color:var(--muted)">${escapeHtml(fecha || "Fecha no registrada")}${precio ? ` · ${precio}` : ""}${metodo}</span>`;
 }
 
 function piezasFiltradas() {
@@ -177,7 +494,9 @@ function piezasFiltradas() {
     p.lado,
     p.estado,
     p.numero_parte,
-    p.descripcion
+    p.descripcion,
+    p.metodo_pago,
+    nombrePerfil(p.vendido_por)
   ].join(" ")).includes(q));
 }
 
@@ -187,7 +506,7 @@ function pintarTabla() {
   tbody.innerHTML = "";
 
   if (!filtradas.length) {
-    tbody.innerHTML = `<tr><td colspan="7">No hay piezas con ese filtro.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8">No hay piezas con ese filtro.</td></tr>`;
     return;
   }
 
@@ -206,6 +525,7 @@ function pintarTabla() {
       <td>${escapeHtml(p.marca || "")} ${escapeHtml(p.modelo || "")}<br><span style="color:var(--muted)">${escapeHtml(p.anio || "")}</span></td>
       <td>${dinero(p.precio)}</td>
       <td><span class="pill ${p.disponible ? "" : "off"}">${p.disponible ? "Disponible" : "Vendido / oculto"}</span></td>
+      <td>${textoVentaPieza(p)}</td>
       <td>
         <div class="row-actions">
           <button class="btn mini" data-action="edit" data-id="${p.id}">Editar</button>
@@ -252,16 +572,76 @@ function editarPieza(p) {
 }
 
 async function toggleDisponibilidad(p) {
-  setStatus("tableStatus", "Actualizando disponibilidad...");
-  const { error } = await supabase
-    .from("piezas")
-    .update({ disponible: !p.disponible, estado: !p.disponible ? "Disponible" : "Vendido" })
-    .eq("id", p.id);
+  if (!p.disponible) {
+    const confirmar = confirm(`¿Volver a publicar la pieza ${p.folio || p.pieza}?`);
+    if (!confirmar) return;
+
+    setStatus("tableStatus", "Publicando pieza...");
+    const payload = auditarPayload({
+      disponible: true,
+      estado: "Disponible",
+      vendido_por: null,
+      vendido_en: null,
+      precio_venta: null,
+      metodo_pago: null,
+      nota_venta: null
+    });
+
+    const payloadSeguro = extrasDisponibles.auditoriaPiezas ? payload : { disponible: true, estado: "Disponible" };
+    const { error } = await avDB.from("piezas").update(payloadSeguro).eq("id", p.id);
+
+    if (error) {
+      setStatus("tableStatus", "Error: " + error.message, "err");
+      return;
+    }
+
+    await registrarMovimiento("publicar", p, { antes: "Vendido", despues: "Disponible" });
+    await cargarPiezas();
+    return;
+  }
+
+  const precioTexto = prompt(`Precio final de venta para ${p.folio || p.pieza}:`, p.precio || "");
+  if (precioTexto === null) return;
+  const precioVenta = numero(precioTexto) || p.precio || null;
+
+  const metodoPago = prompt("Método de pago: efectivo, transferencia, TDC, TDD u otro", "Efectivo");
+  if (metodoPago === null) return;
+
+  const notaVenta = prompt("Nota opcional de la venta:", "");
+  if (notaVenta === null) return;
+
+  setStatus("tableStatus", "Registrando venta...");
+  const vendidoEn = new Date().toISOString();
+  const payloadVenta = auditarPayload({
+    disponible: false,
+    estado: "Vendido",
+    vendido_por: usuarioId(),
+    vendido_en: vendidoEn,
+    precio_venta: precioVenta,
+    metodo_pago: metodoPago.trim() || null,
+    nota_venta: notaVenta.trim() || null
+  });
+  const payloadSeguro = extrasDisponibles.auditoriaPiezas
+    ? payloadVenta
+    : { disponible: false, estado: "Vendido" };
+
+  const { error } = await avDB.from("piezas").update(payloadSeguro).eq("id", p.id);
 
   if (error) {
     setStatus("tableStatus", "Error: " + error.message, "err");
     return;
   }
+
+  await registrarVenta(p, {
+    precio_venta: precioVenta,
+    metodo_pago: metodoPago.trim() || null,
+    nota: notaVenta.trim() || null,
+    vendido_en: vendidoEn
+  });
+  await registrarMovimiento("marcar_vendido", p, {
+    precio_venta: precioVenta,
+    metodo_pago: metodoPago.trim() || null
+  });
 
   await cargarPiezas();
 }
@@ -284,6 +664,7 @@ async function eliminarPieza(p) {
     return;
   }
 
+  await registrarMovimiento("eliminar_pieza", p, { fotos_eliminadas: paths.length });
   limpiarFormulario();
   await cargarPiezas();
 }
@@ -305,26 +686,32 @@ async function guardarPieza(event) {
 
   try {
     if (idActual) {
-      const { data, error } = await supabase
+      const payloadActualizado = auditarPayload(payload, "actualizar");
+      const { data, error } = await avDB
         .from("piezas")
-        .update(payload)
+        .update(payloadActualizado)
         .eq("id", idActual)
         .select()
         .single();
       if (error) throw error;
       piezaGuardada = data;
+      await registrarMovimiento("editar_pieza", piezaGuardada, { folio: piezaGuardada.folio || null });
     } else {
-      const { data, error } = await supabase
+      const payloadNuevo = auditarPayload(payload, "crear");
+      const { data, error } = await avDB
         .from("piezas")
-        .insert(payload)
+        .insert(payloadNuevo)
         .select()
         .single();
       if (error) throw error;
       piezaGuardada = data;
+      await registrarMovimiento("crear_pieza", piezaGuardada, { folio: piezaGuardada.folio || null });
     }
 
     if (archivosSeleccionados.length) {
+      const cantidadFotos = archivosSeleccionados.length;
       await subirFotos(piezaGuardada.id, archivosSeleccionados);
+      await registrarMovimiento("subir_fotos", piezaGuardada, { cantidad: cantidadFotos });
     }
 
     setStatus("formStatus", "Publicación guardada. Ya puede aparecer en el catálogo.", "ok");
@@ -496,21 +883,22 @@ async function importarExcel(event) {
         if (buscarError) throw buscarError;
 
         if (existente) {
-          const { error } = await avDB.from("piezas").update(item).eq("id", existente.id);
+          const { error } = await avDB.from("piezas").update(auditarPayload(item, "actualizar")).eq("id", existente.id);
           if (error) throw error;
           actualizadas++;
         } else {
-          const { error } = await avDB.from("piezas").insert(item);
+          const { error } = await avDB.from("piezas").insert(auditarPayload(item, "crear"));
           if (error) throw error;
           creadas++;
         }
       } else {
-        const { error } = await avDB.from("piezas").insert(item);
+        const { error } = await avDB.from("piezas").insert(auditarPayload(item, "crear"));
         if (error) throw error;
         creadas++;
       }
     }
 
+    await registrarMovimiento("importar_excel", null, { creadas, actualizadas, archivo: file.name });
     await cargarPiezas();
     setStatus("tableStatus", `Excel importado: ${creadas} creadas, ${actualizadas} actualizadas.`, "ok");
   } catch (error) {
@@ -532,6 +920,10 @@ function exportarExcel() {
     Estado: p.estado || "",
     Precio: p.precio || "",
     Disponible: p.disponible ? "SI" : "NO",
+    "Vendido por": p.vendido_por ? nombrePerfil(p.vendido_por, "") : "",
+    "Fecha de venta": p.vendido_en ? fechaCorta(p.vendido_en) : "",
+    "Precio venta": p.precio_venta || "",
+    "Método de pago": p.metodo_pago || "",
     "Número de parte": p.numero_parte || "",
     Observaciones: p.descripcion || "",
     Fotos: p.fotos?.length || 0
