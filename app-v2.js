@@ -92,6 +92,7 @@
       .from("piezas")
       .select("*, fotos(url, orden)")
       .eq("disponible", true)
+      .is("vendido_en", null)
       .order("created_at", { ascending: false });
 
     if (error) {
