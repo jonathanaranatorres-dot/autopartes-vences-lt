@@ -542,9 +542,9 @@ function pintarTabla() {
       <td>${textoVentaPieza(p)}</td>
       <td>
         <div class="row-actions">
-          <button class="btn mini" data-action="edit" data-id="${p.id}">Editar</button>
+          <button class="btn mini admin-only" data-action="edit" data-id="${p.id}">Editar</button>
           <button class="btn mini" data-action="toggle" data-id="${p.id}">${p.disponible ? "Marcar vendido" : "Publicar"}</button>
-          <button class="btn mini danger" data-action="delete" data-id="${p.id}">Eliminar</button>
+          <button class="btn mini danger admin-only" data-action="delete" data-id="${p.id}">Eliminar</button>
         </div>
       </td>
     `;
@@ -552,8 +552,12 @@ function pintarTabla() {
   });
 
   tbody.querySelectorAll("button[data-action]").forEach((btn) => {
-    btn.addEventListener("click", () => manejarAccionTabla(btn.dataset.action, btn.dataset.id));
-  });
+  btn.addEventListener("click", () => manejarAccionTabla(btn.dataset.action, btn.dataset.id));
+});
+
+if (typeof aplicarVistaPorRol === "function") {
+  aplicarVistaPorRol();
+}
 }
 
 async function manejarAccionTabla(action, id) {
