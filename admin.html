@@ -599,9 +599,9 @@
 
       <section class="panel">
         <h2>Inventario</h2>
-        <p class="hint">Busca, edita, marca vendido, elimina o carga filas desde tu Excel con vista de control.</p>
+        <p class="hint">Busca piezas, revisa disponibilidad y registra ventas con vista de control.</p>
 
-        <div class="stats">
+        <div class="stats admin-only">
           <div class="stat"><strong id="statTotal">0</strong><span>Total de piezas</span></div>
           <div class="stat"><strong id="statDisponibles">0</strong><span>Disponibles</span></div>
           <div class="stat"><strong id="statFotos">0</strong><span>Con fotos</span></div>
@@ -610,7 +610,7 @@
           <div class="stat"><strong id="statMejorVendedor">Sin ventas</strong><span>Mejor vendedor del mes</span></div>
         </div>
 
-        <div class="sales-box">
+        <div class="sales-box admin-only">
           <div class="sales-head">
             <h3>Ventas del mes</h3>
             <span>Por usuario, monto y piezas</span>
@@ -622,7 +622,7 @@
 
         <div class="toolbar">
           <input id="searchAdmin" placeholder="Buscar por ID, pieza, marca, modelo, año...">
-          <label class="btn" for="excelInput">Importar Excel</label>
+          <label class="btn admin-only" for="excelInput">Importar Excel</label>
           <input id="excelInput" type="file" accept=".xlsx,.xls,.csv" hidden>
         </div>
 
