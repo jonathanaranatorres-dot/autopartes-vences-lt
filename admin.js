@@ -6,6 +6,9 @@ const bucket = window.AV_CONFIG?.STORAGE_BUCKET || "fotos-piezas";
 
 let piezas = [];
 let archivosSeleccionados = [];
+let fotosTrabajo = [];
+let fotosEliminadas = [];
+let contadorFotoTemporal = 0;
 let filtroTabla = "";
 let usuarioActual = null;
 let perfilActual = null;
@@ -330,7 +333,7 @@ function limpiarFormulario() {
   $("numeroParte").value = "";
   $("descripcion").value = "";
   $("disponible").checked = true;
-  archivosSeleccionados = [];
+  resetFotosTrabajo();
   pintarPreview();
   $("formTitle").textContent = "Nueva pieza";
   setStatus("formStatus", "");
@@ -583,8 +586,13 @@ function editarPieza(p) {
   $("numeroParte").value = p.numero_parte || "";
   $("descripcion").value = p.descripcion || "";
   $("disponible").checked = Boolean(p.disponible);
-  archivosSeleccionados = [];
-  pintarPreview(p.fotos || []);
+  resetFotosTrabajo();
+  fotosTrabajo = (p.fotos || []).map((foto) => ({
+    ...foto,
+    tipo: "guardada",
+    clave: `guardada-${foto.id}`
+  }));
+  pintarPreview();
   $("formTitle").textContent = `Editando ${p.folio || p.pieza || "pieza"}`;
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
@@ -726,13 +734,12 @@ async function guardarPieza(event) {
       await registrarMovimiento("crear_pieza", piezaGuardada, { folio: piezaGuardada.folio || null });
     }
 
-    if (archivosSeleccionados.length) {
-      const cantidadFotos = archivosSeleccionados.length;
-      await subirFotos(piezaGuardada.id, archivosSeleccionados);
-      await registrarMovimiento("subir_fotos", piezaGuardada, { cantidad: cantidadFotos });
+    const resumenFotos = await guardarFotosTrabajo(piezaGuardada.id);
+    if (resumenFotos.subidas || resumenFotos.eliminadas || resumenFotos.reordenadas) {
+      await registrarMovimiento("actualizar_fotos", piezaGuardada, resumenFotos);
     }
 
-    setStatus("formStatus", "Publicación guardada. Ya puede aparecer en el catálogo.", "ok");
+    setStatus("formStatus", "Publicación guardada. Fotos y portada actualizadas.", "ok");
     limpiarFormulario();
     await cargarPiezas();
   } catch (error) {
@@ -742,69 +749,211 @@ async function guardarPieza(event) {
   }
 }
 
-async function subirFotos(piezaId, archivos) {
-  setStatus("formStatus", `Subiendo ${archivos.length} foto(s)...`);
+async function guardarFotosTrabajo(piezaId) {
+  const resumen = { subidas: 0, eliminadas: 0, reordenadas: 0 };
 
-  const { data: fotosExistentes } = await supabase
-    .from("fotos")
-    .select("orden")
-    .eq("pieza_id", piezaId)
-    .order("orden", { ascending: false })
-    .limit(1);
+  if (!piezaId) return resumen;
 
-  let ordenBase = fotosExistentes?.[0]?.orden ?? -1;
+  if (fotosEliminadas.length) {
+    setStatus("formStatus", `Eliminando ${fotosEliminadas.length} foto(s)...`);
 
-  for (let i = 0; i < archivos.length; i++) {
-    const file = archivos[i];
-    const extension = file.name.includes(".") ? file.name.split(".").pop().toLowerCase() : "jpg";
-    const path = `${piezaId}/${Date.now()}-${i + 1}-${slug(file.name)}.${extension}`;
+    const ids = fotosEliminadas.map((foto) => foto.id).filter(Boolean);
+    const paths = fotosEliminadas.map((foto) => foto.storage_path).filter(Boolean);
 
-    const { error: uploadError } = await avDB.storage
-      .from(bucket)
-      .upload(path, file, {
-        cacheControl: "3600",
-        upsert: false,
-        contentType: file.type || "image/jpeg"
-      });
+    if (paths.length) {
+      const { error: storageError } = await avDB.storage.from(bucket).remove(paths);
+      if (storageError) throw storageError;
+    }
 
-    if (uploadError) throw uploadError;
+    if (ids.length) {
+      const { error: deleteError } = await avDB.from("fotos").delete().in("id", ids);
+      if (deleteError) throw deleteError;
+    }
 
-    const { data: publicData } = avDB.storage.from(bucket).getPublicUrl(path);
-    const url = publicData.publicUrl;
+    resumen.eliminadas = ids.length;
+  }
 
-    const { error: insertFotoError } = await avDB.from("fotos").insert({
-      pieza_id: piezaId,
-      url,
-      storage_path: path,
-      orden: ordenBase + i + 1
+  for (let orden = 0; orden < fotosTrabajo.length; orden++) {
+    const foto = fotosTrabajo[orden];
+
+    if (foto.tipo === "guardada") {
+      if (Number(foto.orden ?? -1) !== orden) {
+        const { error } = await avDB.from("fotos").update({ orden }).eq("id", foto.id);
+        if (error) throw error;
+        resumen.reordenadas += 1;
+        foto.orden = orden;
+      }
+      continue;
+    }
+
+    if (foto.tipo === "nueva") {
+      setStatus("formStatus", `Subiendo foto ${resumen.subidas + 1}...`);
+      await subirFotoNueva(piezaId, foto.file, orden);
+      resumen.subidas += 1;
+    }
+  }
+
+  fotosEliminadas = [];
+  sincronizarArchivosSeleccionados();
+  return resumen;
+}
+
+async function subirFotoNueva(piezaId, file, orden) {
+  const extension = file.name.includes(".") ? file.name.split(".").pop().toLowerCase() : "jpg";
+  const sello = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const path = `${piezaId}/${sello}-${orden + 1}-${slug(file.name)}.${extension}`;
+
+  const { error: uploadError } = await avDB.storage
+    .from(bucket)
+    .upload(path, file, {
+      cacheControl: "3600",
+      upsert: false,
+      contentType: file.type || "image/jpeg"
     });
 
-    if (insertFotoError) throw insertFotoError;
-  }
+  if (uploadError) throw uploadError;
+
+  const { data: publicData } = avDB.storage.from(bucket).getPublicUrl(path);
+  const url = publicData.publicUrl;
+
+  const { error: insertFotoError } = await avDB.from("fotos").insert({
+    pieza_id: piezaId,
+    url,
+    storage_path: path,
+    orden
+  });
+
+  if (insertFotoError) throw insertFotoError;
+}
+
+function resetFotosTrabajo() {
+  fotosTrabajo.forEach((foto) => {
+    if (foto.tipo === "nueva" && foto.url?.startsWith("blob:")) {
+      URL.revokeObjectURL(foto.url);
+    }
+  });
+  fotosTrabajo = [];
+  fotosEliminadas = [];
+  archivosSeleccionados = [];
+  const input = $("fotosInput");
+  if (input) input.value = "";
+}
+
+function sincronizarArchivosSeleccionados() {
+  archivosSeleccionados = fotosTrabajo
+    .filter((foto) => foto.tipo === "nueva")
+    .map((foto) => foto.file);
+}
+
+function prepararFotoNueva(file) {
+  contadorFotoTemporal += 1;
+  return {
+    tipo: "nueva",
+    clave: `nueva-${Date.now()}-${contadorFotoTemporal}`,
+    nombre: file.name,
+    file,
+    url: URL.createObjectURL(file)
+  };
 }
 
 function seleccionarFotos(files) {
   const nuevos = [...files].filter((file) => file.type.startsWith("image/"));
-  archivosSeleccionados = [...archivosSeleccionados, ...nuevos];
+  if (!nuevos.length) return;
+
+  fotosTrabajo = [...fotosTrabajo, ...nuevos.map(prepararFotoNueva)];
+  sincronizarArchivosSeleccionados();
+  pintarPreview();
+
+  const input = $("fotosInput");
+  if (input) input.value = "";
+}
+
+function quitarFoto(index) {
+  const foto = fotosTrabajo[index];
+  if (!foto) return;
+
+  const confirmar = foto.tipo === "guardada"
+    ? confirm("¿Quitar esta foto de la publicación? Se borrará al guardar.")
+    : true;
+
+  if (!confirmar) return;
+
+  if (foto.tipo === "guardada") {
+    fotosEliminadas.push(foto);
+  } else if (foto.url?.startsWith("blob:")) {
+    URL.revokeObjectURL(foto.url);
+  }
+
+  fotosTrabajo.splice(index, 1);
+  sincronizarArchivosSeleccionados();
   pintarPreview();
 }
 
-function pintarPreview(fotosGuardadas = []) {
+function moverFoto(index, direccion) {
+  const nuevoIndex = index + direccion;
+  if (nuevoIndex < 0 || nuevoIndex >= fotosTrabajo.length) return;
+
+  const copia = [...fotosTrabajo];
+  [copia[index], copia[nuevoIndex]] = [copia[nuevoIndex], copia[index]];
+  fotosTrabajo = copia;
+  sincronizarArchivosSeleccionados();
+  pintarPreview();
+}
+
+function hacerPortada(index) {
+  if (index <= 0 || index >= fotosTrabajo.length) return;
+
+  const copia = [...fotosTrabajo];
+  const [foto] = copia.splice(index, 1);
+  copia.unshift(foto);
+  fotosTrabajo = copia;
+  sincronizarArchivosSeleccionados();
+  pintarPreview();
+}
+
+function manejarAccionPreview(event) {
+  const boton = event.target.closest("[data-photo-action]");
+  if (!boton) return;
+
+  const index = Number(boton.dataset.index);
+  const accion = boton.dataset.photoAction;
+
+  if (accion === "delete") quitarFoto(index);
+  if (accion === "up") moverFoto(index, -1);
+  if (accion === "down") moverFoto(index, 1);
+  if (accion === "cover") hacerPortada(index);
+}
+
+function pintarPreview() {
   const preview = $("preview");
   preview.innerHTML = "";
 
-  fotosGuardadas.forEach((foto) => {
-    const img = document.createElement("img");
-    img.src = foto.url;
-    img.alt = "Foto guardada";
-    preview.appendChild(img);
-  });
+  if (!fotosTrabajo.length) {
+    preview.innerHTML = `<p class="preview-note">Todavía no hay fotos. La primera foto que agregues será la portada.</p>`;
+    return;
+  }
 
-  archivosSeleccionados.forEach((file) => {
-    const img = document.createElement("img");
-    img.src = URL.createObjectURL(file);
-    img.alt = file.name;
-    preview.appendChild(img);
+  fotosTrabajo.forEach((foto, index) => {
+    const card = document.createElement("article");
+    card.className = `preview-card ${index === 0 ? "cover" : ""}`.trim();
+
+    const etiqueta = foto.tipo === "guardada" ? "Guardada" : "Nueva";
+    const nombre = foto.nombre || foto.file?.name || `Foto ${index + 1}`;
+
+    card.innerHTML = `
+      <div class="preview-photo-wrap">
+        <img src="${escapeHtml(foto.url)}" alt="${escapeHtml(nombre)}">
+        <span class="preview-badge">${index === 0 ? "Portada" : etiqueta}</span>
+      </div>
+      <div class="preview-actions">
+        <button type="button" class="photo-btn" data-photo-action="cover" data-index="${index}" ${index === 0 ? "disabled" : ""}>Portada</button>
+        <button type="button" class="photo-btn" data-photo-action="up" data-index="${index}" ${index === 0 ? "disabled" : ""}>↑</button>
+        <button type="button" class="photo-btn" data-photo-action="down" data-index="${index}" ${index === fotosTrabajo.length - 1 ? "disabled" : ""}>↓</button>
+        <button type="button" class="photo-btn danger" data-photo-action="delete" data-index="${index}">Eliminar</button>
+      </div>
+    `;
+
+    preview.appendChild(card);
   });
 }
 
@@ -969,6 +1118,7 @@ function registrarEventos() {
   $("resetBtn").addEventListener("click", limpiarFormulario);
   $("excelInput").addEventListener("change", importarExcel);
   $("exportExcel").addEventListener("click", exportarExcel);
+  $("preview").addEventListener("click", manejarAccionPreview);
   $("searchAdmin").addEventListener("input", (event) => {
     filtroTabla = event.target.value;
     pintarTabla();
