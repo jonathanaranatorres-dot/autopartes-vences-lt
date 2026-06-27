@@ -545,8 +545,9 @@ function pintarTabla() {
       <td>${textoVentaPieza(p)}</td>
       <td>
         <div class="row-actions">
-          <button class="btn mini admin-only" data-action="edit" data-id="${p.id}">Editar</button>
           <button class="btn mini" data-action="toggle" data-id="${p.id}">${p.disponible ? "Marcar vendido" : "Publicar"}</button>
+          <button class="btn mini" data-action="downloadPhotos" data-id="${p.id}" ${p.fotos?.length ? "" : "disabled"}>Descargar fotos</button>
+          <button class="btn mini admin-only" data-action="edit" data-id="${p.id}">Editar</button>
           <button class="btn mini danger admin-only" data-action="delete" data-id="${p.id}">Eliminar</button>
         </div>
       </td>
@@ -569,8 +570,224 @@ async function manejarAccionTabla(action, id) {
 
   if (action === "edit") return editarPieza(pieza);
   if (action === "toggle") return toggleDisponibilidad(pieza);
+  if (action === "downloadPhotos") return descargarFotosPieza(pieza);
   if (action === "delete") return eliminarPieza(pieza);
 }
+
+
+async function descargarFotosPieza(p) {
+  const fotos = (p.fotos || []).filter((foto) => foto?.url || foto?.storage_path);
+
+  if (!fotos.length) {
+    alert("Esta pieza todavía no tiene fotos para descargar.");
+    return;
+  }
+
+  const base = nombreBaseDescarga(p);
+  setStatus("tableStatus", `Preparando ZIP con ${fotos.length} foto(s) de ${p.folio || p.pieza || "la pieza"}...`);
+
+  try {
+    const zip = new ZipSinCompresion();
+
+    for (let i = 0; i < fotos.length; i++) {
+      const foto = fotos[i];
+      setStatus("tableStatus", `Agregando foto ${i + 1} de ${fotos.length} al ZIP...`);
+
+      const blob = await obtenerBlobFoto(foto);
+      const extension = extensionFoto(foto, blob.type);
+      const nombre = `${base}-${String(i + 1).padStart(2, "0")}.${extension}`;
+      const bytes = new Uint8Array(await blob.arrayBuffer());
+      zip.add(nombre, bytes);
+    }
+
+    const zipBlob = zip.blob();
+    descargarBlob(zipBlob, `${base}-fotos.zip`);
+    setStatus("tableStatus", `ZIP listo: ${fotos.length} foto(s) descargadas.`, "ok");
+  } catch (error) {
+    console.error("Error descargando fotos:", error);
+    setStatus("tableStatus", "No se pudo generar el ZIP: " + error.message, "err");
+  }
+}
+
+async function obtenerBlobFoto(foto) {
+  if (foto.storage_path && avDB?.storage) {
+    const { data, error } = await avDB.storage.from(bucket).download(foto.storage_path);
+    if (!error && data) return data;
+  }
+
+  if (foto.url) {
+    const response = await fetch(foto.url, { mode: "cors" });
+    if (!response.ok) throw new Error(`No se pudo leer una foto (${response.status}).`);
+    return await response.blob();
+  }
+
+  throw new Error("Una foto no tiene URL ni ruta de almacenamiento.");
+}
+
+function nombreBaseDescarga(p) {
+  const partes = [
+    p.folio ? `ID-${p.folio}` : p.id?.slice(0, 8),
+    p.pieza,
+    p.marca,
+    p.modelo,
+    p.anio
+  ].filter(Boolean);
+
+  return slug(partes.join("-"))
+    .replace(/-+/g, "-")
+    .slice(0, 90) || "autoparte-vences";
+}
+
+function extensionFoto(foto, mime = "") {
+  const desdeMime = String(mime || "").toLowerCase();
+  if (desdeMime.includes("jpeg") || desdeMime.includes("jpg")) return "jpg";
+  if (desdeMime.includes("png")) return "png";
+  if (desdeMime.includes("webp")) return "webp";
+  if (desdeMime.includes("avif")) return "avif";
+  if (desdeMime.includes("heic")) return "heic";
+
+  const texto = [foto.storage_path, foto.url, foto.nombre].filter(Boolean).join(" ").split("?")[0].toLowerCase();
+  const match = texto.match(/\.([a-z0-9]{2,5})$/);
+  const ext = match?.[1];
+  return ["jpg", "jpeg", "png", "webp", "avif", "heic"].includes(ext) ? (ext === "jpeg" ? "jpg" : ext) : "jpg";
+}
+
+function descargarBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+class ZipSinCompresion {
+  constructor() {
+    this.files = [];
+  }
+
+  add(nombre, bytes) {
+    const limpio = nombre.replace(/[\\/:*?"<>|]+/g, "-");
+    this.files.push({ nombre: limpio, bytes, crc: crc32(bytes), fecha: new Date() });
+  }
+
+  blob() {
+    const locales = [];
+    const centrales = [];
+    let offset = 0;
+
+    for (const file of this.files) {
+      const nameBytes = new TextEncoder().encode(file.nombre);
+      const { time, date } = fechaZip(file.fecha);
+
+      const local = bytesZip([
+        u32(0x04034b50),
+        u16(20),
+        u16(0x0800),
+        u16(0),
+        u16(time),
+        u16(date),
+        u32(file.crc),
+        u32(file.bytes.length),
+        u32(file.bytes.length),
+        u16(nameBytes.length),
+        u16(0),
+        nameBytes,
+        file.bytes
+      ]);
+
+      const central = bytesZip([
+        u32(0x02014b50),
+        u16(20),
+        u16(20),
+        u16(0x0800),
+        u16(0),
+        u16(time),
+        u16(date),
+        u32(file.crc),
+        u32(file.bytes.length),
+        u32(file.bytes.length),
+        u16(nameBytes.length),
+        u16(0),
+        u16(0),
+        u16(0),
+        u16(0),
+        u32(0),
+        u32(offset),
+        nameBytes
+      ]);
+
+      locales.push(local);
+      centrales.push(central);
+      offset += local.length;
+    }
+
+    const centralOffset = offset;
+    const centralSize = centrales.reduce((total, item) => total + item.length, 0);
+    const end = bytesZip([
+      u32(0x06054b50),
+      u16(0),
+      u16(0),
+      u16(this.files.length),
+      u16(this.files.length),
+      u32(centralSize),
+      u32(centralOffset),
+      u16(0)
+    ]);
+
+    return new Blob([...locales, ...centrales, end], { type: "application/zip" });
+  }
+}
+
+function fechaZip(fecha) {
+  const year = Math.max(1980, fecha.getFullYear());
+  const time = (fecha.getHours() << 11) | (fecha.getMinutes() << 5) | Math.floor(fecha.getSeconds() / 2);
+  const date = ((year - 1980) << 9) | ((fecha.getMonth() + 1) << 5) | fecha.getDate();
+  return { time, date };
+}
+
+function u16(value) {
+  return Uint8Array.of(value & 255, (value >>> 8) & 255);
+}
+
+function u32(value) {
+  return Uint8Array.of(value & 255, (value >>> 8) & 255, (value >>> 16) & 255, (value >>> 24) & 255);
+}
+
+function bytesZip(partes) {
+  const total = partes.reduce((suma, parte) => suma + parte.length, 0);
+  const salida = new Uint8Array(total);
+  let offset = 0;
+
+  partes.forEach((parte) => {
+    salida.set(parte, offset);
+    offset += parte.length;
+  });
+
+  return salida;
+}
+
+function crc32(bytes) {
+  let crc = -1;
+  for (let i = 0; i < bytes.length; i++) {
+    crc = (crc >>> 8) ^ tablaCrc32[(crc ^ bytes[i]) & 0xff];
+  }
+  return (crc ^ -1) >>> 0;
+}
+
+const tablaCrc32 = (() => {
+  const tabla = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) {
+      c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    }
+    tabla[n] = c >>> 0;
+  }
+  return tabla;
+})();
 
 function editarPieza(p) {
   $("piezaId").value = p.id;
@@ -799,18 +1016,16 @@ async function guardarFotosTrabajo(piezaId) {
 }
 
 async function subirFotoNueva(piezaId, file, orden) {
-  const archivoOptimizado = await optimizarImagenParaWeb(file);
-  const nombreOriginal = file?.name || archivoOptimizado.name || "foto.jpg";
-  const extension = archivoOptimizado.name.includes(".") ? archivoOptimizado.name.split(".").pop().toLowerCase() : "jpg";
+  const extension = file.name.includes(".") ? file.name.split(".").pop().toLowerCase() : "jpg";
   const sello = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const path = `${piezaId}/${sello}-${orden + 1}-${slug(nombreOriginal)}.${extension}`;
+  const path = `${piezaId}/${sello}-${orden + 1}-${slug(file.name)}.${extension}`;
 
   const { error: uploadError } = await avDB.storage
     .from(bucket)
-    .upload(path, archivoOptimizado, {
-      cacheControl: "2592000",
+    .upload(path, file, {
+      cacheControl: "3600",
       upsert: false,
-      contentType: archivoOptimizado.type || "image/jpeg"
+      contentType: file.type || "image/jpeg"
     });
 
   if (uploadError) throw uploadError;
@@ -826,64 +1041,6 @@ async function subirFotoNueva(piezaId, file, orden) {
   });
 
   if (insertFotoError) throw insertFotoError;
-}
-
-async function optimizarImagenParaWeb(file) {
-  const MAX_LADO = 1600;
-  const CALIDAD = 0.82;
-
-  if (!file || !file.type?.startsWith("image/") || file.type === "image/gif") return file;
-
-  try {
-    const dataUrl = await leerArchivoComoDataURL(file);
-    const img = await cargarImagenTemporal(dataUrl);
-    const ladoMayor = Math.max(img.naturalWidth || img.width, img.naturalHeight || img.height);
-
-    if (ladoMayor <= MAX_LADO && file.size < 700 * 1024) return file;
-
-    const escala = Math.min(1, MAX_LADO / ladoMayor);
-    const ancho = Math.max(1, Math.round((img.naturalWidth || img.width) * escala));
-    const alto = Math.max(1, Math.round((img.naturalHeight || img.height) * escala));
-
-    const canvas = document.createElement("canvas");
-    canvas.width = ancho;
-    canvas.height = alto;
-
-    const ctx = canvas.getContext("2d");
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, ancho, alto);
-    ctx.drawImage(img, 0, 0, ancho, alto);
-
-    const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", CALIDAD));
-    if (!blob || blob.size >= file.size * 0.96) return file;
-
-    const nombreJpg = file.name.replace(/\.[^.]+$/, "") + ".jpg";
-    return new File([blob], nombreJpg, {
-      type: "image/jpeg",
-      lastModified: Date.now()
-    });
-  } catch (error) {
-    console.warn("No se pudo optimizar la imagen. Se subirá original:", error.message);
-    return file;
-  }
-}
-
-function leerArchivoComoDataURL(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(reader.error || new Error("No se pudo leer imagen"));
-    reader.readAsDataURL(file);
-  });
-}
-
-function cargarImagenTemporal(src) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error("No se pudo cargar imagen"));
-    img.src = src;
-  });
 }
 
 function resetFotosTrabajo() {
