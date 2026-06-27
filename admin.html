@@ -448,7 +448,9 @@
     .thumbs img { width: 52px; height: 52px; object-fit: cover; border-radius: 14px; border: 1px solid var(--line); box-shadow: 0 10px 20px rgba(0,0,0,.22); }
     .pill { display: inline-flex; align-items: center; border-radius: 999px; padding: 6px 10px; font-size: .82rem; font-weight: 850; background: rgba(46,204,113,.14); color: #c7ffdd; border: 1px solid rgba(46,204,113,.35); }
     .pill.off { background: rgba(255,77,77,.13); color: #ffd5d5; border-color: rgba(255,77,77,.35); }
-    .row-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .row-actions { display: flex; gap: 8px; flex-wrap: nowrap; align-items: center; }
+    .row-actions .btn { white-space: nowrap; }
+    td:last-child, th:last-child { min-width: 280px; }
     .mini { min-height: 36px; padding: 8px 10px; border-radius: 11px; font-size: .86rem; }
     .status { margin: 12px 0 0; color: var(--muted); min-height: 24px; line-height: 1.45; }
     .status.ok { color: #c7ffdd; }
@@ -738,7 +740,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="supabase-config.js"></script>
-  <script src="admin.js?v=paso-3-roles"></script>
+  <script src="admin.js?v=descarga-fotos-2"></script>
   <script>
   function aplicarVistaPorRol() {
     const roleEl = document.getElementById("sessionRole");
