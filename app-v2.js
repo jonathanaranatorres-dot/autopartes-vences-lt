@@ -473,7 +473,7 @@
     actualizarEstadoCatalogo(total, visibles.length);
 
     cargarFotosParaProductos(visibles).then((huboCambios) => {
-      if (huboCambios && version === renderVersion) {
+      if (huboCambios) {
         actualizarStats(productos);
         guardarCache(productos);
         mostrarProductos(filtrados);
@@ -502,7 +502,7 @@
     } catch (error) {
       pendientes.forEach((p) => {
         p.fotosCargando = false;
-        p.fotosCargadas = true;
+        p.fotosCargadas = false;
       });
       throw error;
     }
