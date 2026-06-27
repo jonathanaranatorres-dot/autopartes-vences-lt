@@ -799,16 +799,18 @@ async function guardarFotosTrabajo(piezaId) {
 }
 
 async function subirFotoNueva(piezaId, file, orden) {
-  const extension = file.name.includes(".") ? file.name.split(".").pop().toLowerCase() : "jpg";
+  const archivoOptimizado = await optimizarImagenParaWeb(file);
+  const nombreOriginal = file?.name || archivoOptimizado.name || "foto.jpg";
+  const extension = archivoOptimizado.name.includes(".") ? archivoOptimizado.name.split(".").pop().toLowerCase() : "jpg";
   const sello = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const path = `${piezaId}/${sello}-${orden + 1}-${slug(file.name)}.${extension}`;
+  const path = `${piezaId}/${sello}-${orden + 1}-${slug(nombreOriginal)}.${extension}`;
 
   const { error: uploadError } = await avDB.storage
     .from(bucket)
-    .upload(path, file, {
-      cacheControl: "3600",
+    .upload(path, archivoOptimizado, {
+      cacheControl: "2592000",
       upsert: false,
-      contentType: file.type || "image/jpeg"
+      contentType: archivoOptimizado.type || "image/jpeg"
     });
 
   if (uploadError) throw uploadError;
@@ -824,6 +826,64 @@ async function subirFotoNueva(piezaId, file, orden) {
   });
 
   if (insertFotoError) throw insertFotoError;
+}
+
+async function optimizarImagenParaWeb(file) {
+  const MAX_LADO = 1600;
+  const CALIDAD = 0.82;
+
+  if (!file || !file.type?.startsWith("image/") || file.type === "image/gif") return file;
+
+  try {
+    const dataUrl = await leerArchivoComoDataURL(file);
+    const img = await cargarImagenTemporal(dataUrl);
+    const ladoMayor = Math.max(img.naturalWidth || img.width, img.naturalHeight || img.height);
+
+    if (ladoMayor <= MAX_LADO && file.size < 700 * 1024) return file;
+
+    const escala = Math.min(1, MAX_LADO / ladoMayor);
+    const ancho = Math.max(1, Math.round((img.naturalWidth || img.width) * escala));
+    const alto = Math.max(1, Math.round((img.naturalHeight || img.height) * escala));
+
+    const canvas = document.createElement("canvas");
+    canvas.width = ancho;
+    canvas.height = alto;
+
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, ancho, alto);
+    ctx.drawImage(img, 0, 0, ancho, alto);
+
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", CALIDAD));
+    if (!blob || blob.size >= file.size * 0.96) return file;
+
+    const nombreJpg = file.name.replace(/\.[^.]+$/, "") + ".jpg";
+    return new File([blob], nombreJpg, {
+      type: "image/jpeg",
+      lastModified: Date.now()
+    });
+  } catch (error) {
+    console.warn("No se pudo optimizar la imagen. Se subirá original:", error.message);
+    return file;
+  }
+}
+
+function leerArchivoComoDataURL(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error || new Error("No se pudo leer imagen"));
+    reader.readAsDataURL(file);
+  });
+}
+
+function cargarImagenTemporal(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("No se pudo cargar imagen"));
+    img.src = src;
+  });
 }
 
 function resetFotosTrabajo() {
