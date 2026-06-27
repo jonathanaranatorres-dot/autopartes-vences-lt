@@ -584,28 +584,32 @@ async function descargarFotosPieza(p) {
   }
 
   const base = nombreBaseDescarga(p);
-  setStatus("tableStatus", `Preparando ZIP con ${fotos.length} foto(s) de ${p.folio || p.pieza || "la pieza"}...`);
+  const continuar = fotos.length > 1
+    ? confirm(`Se descargarán ${fotos.length} fotos como imágenes separadas. Si tu navegador pide permiso para descargas múltiples, dale Permitir. ¿Continuar?`)
+    : true;
+
+  if (!continuar) return;
+
+  setStatus("tableStatus", `Descargando ${fotos.length} foto(s) de ${p.folio || p.pieza || "la pieza"}...`);
 
   try {
-    const zip = new ZipSinCompresion();
-
     for (let i = 0; i < fotos.length; i++) {
       const foto = fotos[i];
-      setStatus("tableStatus", `Agregando foto ${i + 1} de ${fotos.length} al ZIP...`);
+      setStatus("tableStatus", `Descargando foto ${i + 1} de ${fotos.length}...`);
 
       const blob = await obtenerBlobFoto(foto);
       const extension = extensionFoto(foto, blob.type);
       const nombre = `${base}-${String(i + 1).padStart(2, "0")}.${extension}`;
-      const bytes = new Uint8Array(await blob.arrayBuffer());
-      zip.add(nombre, bytes);
+      descargarBlob(blob, nombre);
+
+      // Pausa pequeña para que Chrome/Edge no trate todas las descargas como un solo golpe.
+      await esperar(450);
     }
 
-    const zipBlob = zip.blob();
-    descargarBlob(zipBlob, `${base}-fotos.zip`);
-    setStatus("tableStatus", `ZIP listo: ${fotos.length} foto(s) descargadas.`, "ok");
+    setStatus("tableStatus", `${fotos.length} foto(s) enviadas a descarga como imágenes separadas.`, "ok");
   } catch (error) {
     console.error("Error descargando fotos:", error);
-    setStatus("tableStatus", "No se pudo generar el ZIP: " + error.message, "err");
+    setStatus("tableStatus", "No se pudieron descargar las fotos: " + error.message, "err");
   }
 }
 
@@ -661,6 +665,10 @@ function descargarBlob(blob, filename) {
   link.click();
   link.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function esperar(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 class ZipSinCompresion {
