@@ -1,9 +1,15 @@
 (() => {
-  const WHATSAPP = window.AV_CONFIG?.WHATSAPP_NUMBER || "525632753982";
+  const cfg = window.AV_CONFIG || {};
+  const WHATSAPP = cfg.WHATSAPP_NUMBER || "525632753982";
+  const SUPABASE_URL = (cfg.SUPABASE_URL || "").replace(/\/$/, "");
+  const SUPABASE_KEY = cfg.SUPABASE_ANON_KEY || "";
   const CART_KEY = "carritoAutopartesVencesV2";
+  const CACHE_KEY = "avCatalogoPublicoCacheV3";
   const PAGE_SIZE = 12;
+  const REST_PAGE_SIZE = 500;
+  const PHOTO_BATCH_SIZE = 60;
   const SEARCH_DEBOUNCE_MS = 220;
-  const db = window.autopartesSupabase || window.avDB;
+  const API_TIMEOUT_MS = 14000;
 
   let productos = [];
   let filtrados = [];
@@ -12,6 +18,7 @@
   let indiceFotoDetalle = 0;
   let piezasVisibles = PAGE_SIZE;
   let filtroTimer = null;
+  let renderVersion = 0;
 
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => Array.from(document.querySelectorAll(selector));
@@ -54,7 +61,7 @@
       });
     });
 
-    id("refreshBtn")?.addEventListener("click", cargarInventario);
+    id("refreshBtn")?.addEventListener("click", () => cargarInventario({ forzarRed: true }));
     id("clearFiltersBtn")?.addEventListener("click", limpiarFiltros);
     id("navCartBtn")?.addEventListener("click", abrirCarrito);
     id("heroCartBtn")?.addEventListener("click", abrirCarrito);
@@ -79,65 +86,166 @@
     });
   }
 
-  async function cargarInventario() {
+  async function cargarInventario(opciones = {}) {
     setStatus("Cargando piezas disponibles...", "");
 
-    if (!db) {
-      setStatus("No pudimos cargar el inventario. Escríbenos por WhatsApp para revisar disponibilidad.", "err");
-      mostrarProductos([]);
-      return;
+    try {
+      const data = await cargarPiezasDesdeSupabaseREST();
+      usarInventario(data.map(normalizarProducto), textoConteoPiezas(data.length));
+      guardarCache(productos);
+      cargarIndiceFotosEnSegundoPlano();
+    } catch (error) {
+      console.warn("No se pudo cargar Supabase REST:", error);
+      const cache = opciones.forzarRed ? null : leerCache();
+
+      if (cache?.length) {
+        usarInventario(cache.map(normalizarProducto), "Mostrando inventario guardado. Toca Actualizar resultados para intentar de nuevo.");
+        return;
+      }
+
+      try {
+        const respaldo = await cargarDatosJsonRespaldo();
+        usarInventario(respaldo.map((row) => normalizarProducto(row, "respaldo")), "Mostrando respaldo local. Confirma disponibilidad por WhatsApp.");
+      } catch (fallbackError) {
+        console.warn("No se pudo cargar respaldo local:", fallbackError);
+        usarInventario([], "No pudimos cargar el inventario. Escríbenos por WhatsApp para revisar disponibilidad.", "err");
+      }
     }
+  }
 
-    const { data, error } = await db
-      .from("piezas")
-      .select("*, fotos(url, orden)")
-      .eq("disponible", true)
-      .is("vendido_en", null)
-      .order("created_at", { ascending: false });
-
-    if (error) {
-      console.error(error);
-      setStatus("Error cargando inventario: " + error.message, "err");
-      mostrarProductos([]);
-      return;
-    }
-
-    productos = (data || []).map(normalizarProducto);
+  function usarInventario(lista, mensaje, tipo = "ok") {
+    productos = lista;
     filtrados = productos;
     piezasVisibles = PAGE_SIZE;
-
     actualizarTodosLosFiltros();
     actualizarStats(productos);
     actualizarSEO(productos);
     filtrar();
+    setStatus(mensaje, tipo);
   }
 
-  function textoConteoPiezas(total) {
-    return `${total} ${total === 1 ? "pieza disponible cargada" : "piezas disponibles cargadas"}.`;
+  async function cargarPiezasDesdeSupabaseREST() {
+    validarConfigREST();
+    const resultado = [];
+
+    for (let offset = 0; offset < 100000; offset += REST_PAGE_SIZE) {
+      const url = restURL("piezas", {
+        select: "id,folio,pieza,marca,modelo,anio,color,lado,estado,precio,numero_parte,descripcion,disponible,created_at,vendido_en",
+        disponible: "eq.true",
+        vendido_en: "is.null",
+        order: "created_at.desc",
+        limit: String(REST_PAGE_SIZE),
+        offset: String(offset)
+      });
+
+      const pagina = await fetchJSON(url, API_TIMEOUT_MS);
+      if (!Array.isArray(pagina)) throw new Error("Respuesta inesperada del inventario.");
+      resultado.push(...pagina);
+      if (pagina.length < REST_PAGE_SIZE) break;
+    }
+
+    return resultado;
   }
 
-  function normalizarProducto(row) {
-    const fotos = [...(row.fotos || [])]
-      .filter((foto) => foto && foto.url)
-      .sort((a, b) => (a.orden || 0) - (b.orden || 0))
-      .map((foto) => foto.url);
+  async function cargarDatosJsonRespaldo() {
+    const response = await fetch(`datos.json?v=${Date.now()}`, { cache: "no-store" });
+    if (!response.ok) throw new Error("No se pudo leer datos.json");
+    const data = await response.json();
+    return Array.isArray(data) ? data : [];
+  }
+
+  function validarConfigREST() {
+    if (!SUPABASE_URL || !SUPABASE_KEY || SUPABASE_URL.includes("AQUI") || SUPABASE_KEY.includes("AQUI")) {
+      throw new Error("Falta configuración de Supabase.");
+    }
+  }
+
+  function restURL(tabla, params = {}) {
+    const url = new URL(`${SUPABASE_URL}/rest/v1/${tabla}`);
+    Object.entries(params).forEach(([key, value]) => url.searchParams.set(key, value));
+    return url.toString();
+  }
+
+  async function fetchJSON(url, timeout = API_TIMEOUT_MS) {
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), timeout);
+
+    try {
+      const response = await fetch(url, {
+        signal: controller.signal,
+        headers: {
+          apikey: SUPABASE_KEY,
+          Authorization: `Bearer ${SUPABASE_KEY}`
+        }
+      });
+
+      if (!response.ok) {
+        const texto = await response.text().catch(() => "");
+        throw new Error(`Error ${response.status}: ${texto || response.statusText}`);
+      }
+
+      return await response.json();
+    } finally {
+      window.clearTimeout(timer);
+    }
+  }
+
+  function normalizarProducto(row, origen = "supabase") {
+    const fotos = fotosDesdeRow(row, origen);
+    const uuid = limpiar(row.uuid || row.id || "");
+    const folio = limpiar(row.folio || row.id || "");
 
     return {
-      uuid: String(row.id || "").trim(),
-      id: String(row.folio || row.id || "").trim(),
-      pieza: limpiar(row.pieza),
-      marca: limpiar(row.marca),
-      modelo: limpiar(row.modelo),
-      anio: limpiar(row.anio),
-      color: limpiar(row.color),
-      lado: limpiar(row.lado),
-      estado: limpiar(row.estado) || "Disponible",
-      precio: row.precio,
-      numeroParte: limpiar(row.numero_parte),
-      descripcion: limpiar(row.descripcion),
-      disponible: Boolean(row.disponible),
-      fotos
+      uuid,
+      id: folio || uuid,
+      pieza: limpiar(row.pieza || row.Pieza),
+      marca: limpiar(row.marca || row.Marca),
+      modelo: limpiar(row.modelo || row.Modelo),
+      anio: limpiar(row.anio || row.año || row.Anio || row.Año),
+      color: limpiar(row.color || row.Color),
+      lado: limpiar(row.lado || row.Lado),
+      estado: limpiar(row.estado || row.Estado) || "Disponible",
+      precio: row.precio ?? row.Precio,
+      numeroParte: limpiar(row.numero_parte || row.numeroParte || row["numero parte"] || row["No. Parte"]),
+      descripcion: limpiar(row.descripcion || row.notas || row.Notas || row.descripcionSeo),
+      disponible: row.disponible !== false,
+      fotos,
+      fotoCount: fotos.length,
+      fotosCargadas: fotos.length > 0 || origen === "respaldo",
+      fotosCompletas: fotos.length > 0 || origen === "respaldo",
+      fotosCargando: false
     };
+  }
+
+  function fotosDesdeRow(row, origen) {
+    if (Array.isArray(row.fotos)) {
+      return row.fotos
+        .filter((foto) => foto && foto.url)
+        .sort((a, b) => (a.orden || 0) - (b.orden || 0))
+        .map((foto) => prepararUrlFoto(foto.url))
+        .filter(Boolean);
+    }
+
+    if (origen === "respaldo") {
+      return [row.fotoPrincipal, row.foto2, row.foto3, row.foto4, row.foto5, row.foto6, row.link]
+        .map(prepararUrlFoto)
+        .filter(Boolean);
+    }
+
+    return [];
+  }
+
+  function prepararUrlFoto(url) {
+    const texto = limpiar(url);
+    if (!texto) return "";
+
+    const driveFile = texto.match(/drive\.google\.com\/file\/d\/([^/]+)/i);
+    if (driveFile?.[1]) return `https://drive.google.com/thumbnail?id=${encodeURIComponent(driveFile[1])}&sz=w1000`;
+
+    const driveOpen = texto.match(/[?&]id=([^&]+)/i);
+    if (texto.includes("drive.google.com") && driveOpen?.[1]) return `https://drive.google.com/thumbnail?id=${encodeURIComponent(driveOpen[1])}&sz=w1000`;
+
+    return texto;
   }
 
   function limpiar(valor) { return String(valor ?? "").trim(); }
@@ -278,7 +386,7 @@
 
     if (total) total.textContent = lista.length;
     if (marcas) marcas.textContent = valoresUnicos(lista, "marca").length;
-    if (fotos) fotos.textContent = lista.filter((p) => p.fotos.length).length;
+    if (fotos) fotos.textContent = lista.filter((p) => (p.fotoCount || p.fotos.length) > 0).length;
 
     [total, marcas, fotos].forEach((el) => el?.classList.remove("stat-loading"));
   }
@@ -288,6 +396,7 @@
     const template = id("productTemplate");
     if (!grid || !template) return;
 
+    const version = ++renderVersion;
     const total = lista.length;
     const visibles = lista.slice(0, piezasVisibles);
 
@@ -344,15 +453,16 @@
       if (producto.fotos.length) {
         img.src = producto.fotos[0];
         img.alt = tituloProducto(producto);
-        img.loading = "lazy";
+        img.loading = index < 2 ? "eager" : "lazy";
         img.decoding = "async";
-        img.fetchPriority = index < 3 ? "auto" : "low";
-        count.textContent = `${producto.fotos.length} foto${producto.fotos.length === 1 ? "" : "s"}`;
+        img.fetchPriority = index < 2 ? "high" : "low";
+        const cantidad = producto.fotoCount || producto.fotos.length;
+        count.textContent = `${cantidad} foto${cantidad === 1 ? "" : "s"}`;
       } else {
         img.remove();
-        count.textContent = "Sin foto";
+        count.textContent = producto.fotosCargando ? "Cargando foto" : "Sin foto";
         photoBtn.classList.add("sin-foto");
-        photoBtn.insertAdjacentHTML("afterbegin", "<span>Sin foto</span>");
+        photoBtn.insertAdjacentHTML("afterbegin", `<span>${producto.fotosCargando ? "Cargando foto" : "Sin foto"}</span>`);
       }
 
       fragment.appendChild(card);
@@ -361,6 +471,100 @@
     grid.appendChild(fragment);
     actualizarBotonCargarMas(total, visibles.length);
     actualizarEstadoCatalogo(total, visibles.length);
+
+    cargarFotosParaProductos(visibles).then((huboCambios) => {
+      if (huboCambios && version === renderVersion) {
+        actualizarStats(productos);
+        guardarCache(productos);
+        mostrarProductos(filtrados);
+      }
+    }).catch((error) => console.warn("No se pudieron cargar fotos visibles:", error));
+  }
+
+  async function cargarFotosParaProductos(lista) {
+    validarConfigREST();
+    const pendientes = lista.filter((p) => p.uuid && !p.fotosCargadas && !p.fotosCargando);
+    if (!pendientes.length) return false;
+
+    pendientes.forEach((p) => { p.fotosCargando = true; });
+
+    try {
+      const fotosPorPieza = await consultarFotosPorPiezas(pendientes.map((p) => p.uuid));
+      pendientes.forEach((p) => {
+        const fotos = fotosPorPieza.get(p.uuid) || [];
+        p.fotos = fotos.map((foto) => prepararUrlFoto(foto.url)).filter(Boolean);
+        p.fotoCount = fotos.length;
+        p.fotosCargadas = true;
+        p.fotosCompletas = true;
+        p.fotosCargando = false;
+      });
+      return true;
+    } catch (error) {
+      pendientes.forEach((p) => {
+        p.fotosCargando = false;
+        p.fotosCargadas = true;
+      });
+      throw error;
+    }
+  }
+
+  async function consultarFotosPorPiezas(ids) {
+    const mapa = new Map();
+    const limpios = ids.map(limpiar).filter(Boolean);
+
+    for (const lote of partirEnLotes(limpios, PHOTO_BATCH_SIZE)) {
+      const url = restURL("fotos", {
+        select: "pieza_id,url,orden",
+        pieza_id: `in.(${lote.join(",")})`,
+        order: "orden.asc"
+      });
+      const data = await fetchJSON(url, API_TIMEOUT_MS);
+      (data || []).forEach((foto) => {
+        const piezaId = limpiar(foto.pieza_id);
+        if (!mapa.has(piezaId)) mapa.set(piezaId, []);
+        mapa.get(piezaId).push(foto);
+      });
+    }
+
+    mapa.forEach((fotos) => fotos.sort((a, b) => (a.orden || 0) - (b.orden || 0)));
+    return mapa;
+  }
+
+  async function cargarIndiceFotosEnSegundoPlano() {
+    try {
+      validarConfigREST();
+      const conteos = new Map();
+
+      for (let offset = 0; offset < 100000; offset += REST_PAGE_SIZE) {
+        const url = restURL("fotos", {
+          select: "pieza_id",
+          limit: String(REST_PAGE_SIZE),
+          offset: String(offset)
+        });
+        const data = await fetchJSON(url, API_TIMEOUT_MS);
+        if (!Array.isArray(data)) break;
+        data.forEach((foto) => {
+          const piezaId = limpiar(foto.pieza_id);
+          if (piezaId) conteos.set(piezaId, (conteos.get(piezaId) || 0) + 1);
+        });
+        if (data.length < REST_PAGE_SIZE) break;
+      }
+
+      productos.forEach((p) => {
+        const total = conteos.get(p.uuid);
+        if (typeof total === "number") p.fotoCount = total;
+      });
+      actualizarStats(productos);
+      mostrarProductos(filtrados);
+    } catch (error) {
+      console.warn("No se pudo cargar índice de fotos:", error);
+    }
+  }
+
+  function partirEnLotes(lista, tamano) {
+    const lotes = [];
+    for (let i = 0; i < lista.length; i += tamano) lotes.push(lista.slice(i, i + tamano));
+    return lotes;
   }
 
   function actualizarEstadoCatalogo(total, visibles) {
@@ -466,6 +670,16 @@
     id("detailModal").classList.add("open");
     id("detailModal").setAttribute("aria-hidden", "false");
     document.body.classList.add("modal-open");
+
+    if (!producto.fotosCompletas && producto.uuid) {
+      cargarFotosParaProductos([producto]).then(() => {
+        if (productoDetalle === producto) {
+          indiceFotoDetalle = 0;
+          pintarFotoDetalle();
+          pintarThumbsDetalle();
+        }
+      }).catch((error) => console.warn("No se pudieron cargar fotos del detalle:", error));
+    }
   }
 
   function pintarFotoDetalle() {
@@ -476,11 +690,14 @@
     if (fotos.length) {
       img.src = fotos[indiceFotoDetalle];
       img.alt = tituloProducto(productoDetalle);
+      img.loading = "eager";
+      img.decoding = "async";
+      img.fetchPriority = "high";
       count.textContent = `${indiceFotoDetalle + 1} / ${fotos.length}`;
     } else {
       img.removeAttribute("src");
       img.alt = "Sin foto disponible";
-      count.textContent = "Sin foto";
+      count.textContent = productoDetalle.fotosCargando ? "Cargando fotos" : "Sin foto";
     }
   }
 
@@ -494,7 +711,7 @@
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = index === indiceFotoDetalle ? "activo" : "";
-      btn.innerHTML = `<img src="${escaparAttr(url)}" alt="Miniatura ${index + 1}">`;
+      btn.innerHTML = `<img src="${escaparAttr(url)}" alt="Miniatura ${index + 1}" loading="lazy" decoding="async">`;
       btn.addEventListener("click", () => {
         indiceFotoDetalle = index;
         pintarFotoDetalle();
@@ -679,6 +896,43 @@
       if (val !== undefined && val !== null && val !== "") limpio[k] = val;
     });
     return limpio;
+  }
+
+  function textoConteoPiezas(total) {
+    return `${total} ${total === 1 ? "pieza disponible cargada" : "piezas disponibles cargadas"}.`;
+  }
+
+  function leerCache() {
+    try {
+      const cache = JSON.parse(localStorage.getItem(CACHE_KEY) || "null");
+      if (!cache?.data || !Array.isArray(cache.data)) return null;
+      return cache.data;
+    } catch {
+      return null;
+    }
+  }
+
+  function guardarCache(lista) {
+    try {
+      const data = lista.map((p) => ({
+        uuid: p.uuid,
+        id: p.id,
+        pieza: p.pieza,
+        marca: p.marca,
+        modelo: p.modelo,
+        anio: p.anio,
+        color: p.color,
+        lado: p.lado,
+        estado: p.estado,
+        precio: p.precio,
+        numeroParte: p.numeroParte,
+        descripcion: p.descripcion,
+        disponible: p.disponible,
+        fotos: p.fotos.slice(0, 1).map((url, orden) => ({ url, orden })),
+        fotoCount: p.fotoCount || p.fotos.length
+      }));
+      localStorage.setItem(CACHE_KEY, JSON.stringify({ creadoEn: Date.now(), data }));
+    } catch (_) {}
   }
 
   function setStatus(mensaje, tipo = "") {
