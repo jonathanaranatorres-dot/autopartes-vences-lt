@@ -10,6 +10,7 @@
   <meta name="theme-color" content="#0b1020" />
   <meta name="google-site-verification" content="NnQtIlIwbBbwkulIv1HM9y_Sw0bRdRFb0nWIsxOfPuE" />
   <link rel="canonical" href="https://www.autopartesvences.com/" />
+  <link rel="preconnect" href="https://dptfusbqvnjdutoptklb.supabase.co" crossorigin />
 
   <link rel="icon" type="image/jpeg" href="imagenes/logo-vences.jpeg" />
   <link rel="shortcut icon" type="image/jpeg" href="imagenes/logo-vences.jpeg" />
@@ -56,7 +57,7 @@
   <nav class="nav">
     <div class="container nav-inner">
       <a class="brand" href="#inicio" aria-label="AUTOPARTES VENCES inicio">
-        <img src="imagenes/logo-vences.jpeg" alt="Logo AUTOPARTES VENCES" />
+        <img src="imagenes/logo-vences.jpeg" alt="Logo AUTOPARTES VENCES" loading="eager" decoding="async" fetchpriority="high" />
         <span>AUTOPARTES VENCES</span>
       </a>
       <button class="menu-btn" id="menuBtn" type="button" aria-label="Abrir menú">☰</button>
@@ -199,7 +200,7 @@
     <div class="container footer-grid">
       <div>
         <a class="brand footer-brand" href="#inicio">
-          <img src="imagenes/logo-vences.jpeg" alt="Logo AUTOPARTES VENCES" />
+          <img src="imagenes/logo-vences.jpeg" alt="Logo AUTOPARTES VENCES" loading="eager" decoding="async" fetchpriority="high" />
           <span>AUTOPARTES VENCES</span>
         </a>
         <p>Catálogo digital de autopartes disponibles con carrito por WhatsApp.</p>
@@ -277,8 +278,7 @@
     </article>
   </template>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="supabase-config.js?v=2"></script>
-  <script src="app-v2.js?v=4"></script>
+  <script src="supabase-config.js?v=4" defer></script>
+  <script src="app-v2.js?v=12" defer></script>
 </body>
 </html>
