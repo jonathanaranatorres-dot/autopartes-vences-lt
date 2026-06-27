@@ -8,9 +8,10 @@ window.AV_CONFIG = {
 };
 
 window.autopartesSupabase = null;
+window.avDB = null;
 
 (function iniciarSupabase() {
-  const cfg = window.AV_CONFIG;
+  const cfg = window.AV_CONFIG || {};
 
   const incompleto =
     !cfg.SUPABASE_URL ||
@@ -23,15 +24,21 @@ window.autopartesSupabase = null;
     return;
   }
 
-  if (!window.supabase) {
-    console.error("No se cargó la librería de Supabase.");
+  const fabricaSupabase = window.supabase;
+
+  if (!fabricaSupabase || typeof fabricaSupabase.createClient !== "function") {
+    console.warn("La librería Supabase JS no está cargada. El catálogo público usará REST si está disponible.");
     return;
   }
 
-  window.autopartesSupabase = window.supabase.createClient(
+  const cliente = fabricaSupabase.createClient(
     cfg.SUPABASE_URL,
     cfg.SUPABASE_ANON_KEY
   );
-  window.avDB = window.autopartesSupabase;
-window.supabase = window.autopartesSupabase;
+
+  window.autopartesSupabase = cliente;
+  window.avDB = cliente;
+
+  // Mantiene compatibilidad con código anterior del admin que usa window.supabase como cliente.
+  window.supabase = cliente;
 })();
