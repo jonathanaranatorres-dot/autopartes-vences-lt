@@ -263,8 +263,8 @@
   ]);
 
   const GRUPOS_SINONIMOS_BUSQUEDA = [
-    ["faro", "faros", "lampara", "lamparas", "luz", "luces", "delantera", "delantero"],
-    ["calavera", "calaveras", "stop", "stops", "mica", "micas", "trasera", "trasero"],
+    ["faro", "faros", "lampara", "lamparas", "luz", "luces"],
+    ["calavera", "calaveras", "stop", "stops", "mica", "micas"],
     ["defensa", "defensas", "facia", "facias", "fascia", "fascias", "parachoques"],
     ["cofre", "capot", "capo", "bonete"],
     ["salpicadera", "salpicaderas", "lodera", "loderas", "guardafango", "guardafangos"],
@@ -293,6 +293,8 @@
 
   function prepararTextoParaTokens(texto) {
     return normalizar(texto)
+      .replace(/\b(luz|luces|lampara|lamparas)\s+(delantera|delanteras|delantero|delanteros|frontal|frontales)\b/g, " faro ")
+      .replace(/\b(luz|luces|mica|micas|stop|stops|lampara|lamparas)\s+(trasera|traseras|trasero|traseros)\b/g, " calavera ")
       .replace(/\bd\s*[-/]\s*d\b/g, " dd ")
       .replace(/\bd\s*[-/]\s*i\b/g, " di ")
       .replace(/\bi\s*[-/]\s*d\b/g, " di ")
@@ -382,8 +384,8 @@
     const grupos = gruposBusqueda(busqueda);
     if (!grupos.length) return true;
 
-    const texto = textoProducto(producto);
-    return grupos.every((grupo) => grupo.some((token) => texto.includes(token)));
+    const texto = ` ${textoProducto(producto)} `;
+    return grupos.every((grupo) => grupo.some((token) => texto.includes(` ${token} `)));
   }
 
   function getFiltros() {
