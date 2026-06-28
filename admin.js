@@ -92,6 +92,10 @@ function usuarioNombre() {
   return nombreUsuarioActual();
 }
 
+function esAdminActual() {
+  return normalizar(perfilActual?.rol || "").includes("admin");
+}
+
 function nombrePerfil(id, fallback = "") {
   if (!id) return fallback || "";
   const perfil = perfilesPorId.get(id);
@@ -285,7 +289,7 @@ async function cargarVentasMes() {
     try {
       const { data, error } = await avDB
         .from("ventas")
-        .select("id, pieza_id, folio, pieza, precio_venta, metodo_pago, vendedor_id, vendedor_nombre, vendedor_email, vendido_en")
+        .select("id, pieza_id, folio, pieza, marca, modelo, anio, precio_lista, precio_venta, metodo_pago, nota, vendedor_id, vendedor_nombre, vendedor_email, vendido_en")
         .gte("vendido_en", inicioMes)
         .order("vendido_en", { ascending: false });
       if (!error) ventasMes = data || [];
@@ -299,10 +303,16 @@ async function cargarVentasMes() {
       pieza_id: p.id,
       folio: p.folio,
       pieza: p.pieza,
+      marca: p.marca,
+      modelo: p.modelo,
+      anio: p.anio,
+      precio_lista: p.precio,
       precio_venta: p.precio_venta || p.precio,
       metodo_pago: p.metodo_pago,
+      nota: p.nota_venta,
       vendedor_id: p.vendido_por,
       vendedor_nombre: nombrePerfil(p.vendido_por, "Sin registrar"),
+      vendedor_email: "",
       vendido_en: p.vendido_en
     }));
 }
@@ -1300,6 +1310,141 @@ async function importarExcel(event) {
   }
 }
 
+
+function nombreMesCorte() {
+  const fecha = new Date();
+  return new Intl.DateTimeFormat("es-MX", { month: "long", year: "numeric" }).format(fecha);
+}
+
+function claveMesCorte() {
+  const fecha = new Date();
+  return `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function filasVentasMes() {
+  return ventasMes.map((venta) => ({
+    ID: venta.folio || "",
+    Pieza: venta.pieza || "",
+    Marca: venta.marca || "",
+    Modelo: venta.modelo || "",
+    Año: venta.anio || "",
+    "Precio lista": venta.precio_lista || "",
+    "Precio venta": venta.precio_venta || "",
+    "Método de pago": venta.metodo_pago || "",
+    Vendedor: venta.vendedor_nombre || nombrePerfil(venta.vendedor_id, nombreDesdeEmail(venta.vendedor_email)) || "Sin registrar",
+    "Correo vendedor": venta.vendedor_email || "",
+    Fecha: venta.vendido_en ? fechaCorta(venta.vendido_en) : "",
+    Nota: venta.nota || ""
+  }));
+}
+
+function exportarCorteMensual() {
+  if (!esAdminActual()) {
+    setStatus("tableStatus", "Solo el administrador puede generar cortes mensuales.", "err");
+    return;
+  }
+
+  if (!ventasMes.length) {
+    setStatus("tableStatus", "No hay ventas de este mes para generar corte.", "err");
+    return;
+  }
+
+  const totalMes = ventasMes.reduce((suma, venta) => suma + Number(venta.precio_venta || 0), 0);
+  const resumen = resumenVendedores().map((vendedor) => ({
+    Vendedor: vendedor.nombre,
+    "Piezas vendidas": vendedor.piezas,
+    "Total vendido": vendedor.total
+  }));
+
+  const cabecera = [
+    { Dato: "Negocio", Valor: "AUTOPARTES VENCES" },
+    { Dato: "Corte", Valor: nombreMesCorte() },
+    { Dato: "Ventas registradas", Valor: ventasMes.length },
+    { Dato: "Total vendido", Valor: totalMes },
+    { Dato: "Generado por", Valor: usuarioNombre() },
+    { Dato: "Fecha de descarga", Valor: fechaCorta(new Date().toISOString()) }
+  ];
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(cabecera), "Corte");
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(resumen), "Resumen vendedores");
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(filasVentasMes()), "Ventas detalle");
+  XLSX.writeFile(workbook, `autopartes-vences-corte-${claveMesCorte()}.xlsx`);
+
+  setStatus("tableStatus", `Corte mensual descargado: ${ventasMes.length} venta(s), ${dinero(totalMes)}.`, "ok");
+}
+
+async function limpiarVentasCapacitacion() {
+  if (!esAdminActual()) {
+    setStatus("tableStatus", "Solo el administrador puede limpiar ventas de capacitación.", "err");
+    return;
+  }
+
+  if (!ventasMes.length) {
+    setStatus("tableStatus", "No hay ventas de este mes para limpiar.", "err");
+    return;
+  }
+
+  const totalMes = ventasMes.reduce((suma, venta) => suma + Number(venta.precio_venta || 0), 0);
+  const ventasLimpieza = ventasMes.length;
+  const piezaIds = [...new Set(ventasMes.map((venta) => venta.pieza_id).filter(Boolean))];
+  const piezasRepublicadas = piezaIds.length;
+  const ventaIds = ventasMes.map((venta) => venta.id).filter(Boolean);
+
+  const confirmar = confirm(
+    `Esto limpiará ${ventasLimpieza} venta(s) de este mes (${dinero(totalMes)}) y volverá a publicar ${piezasRepublicadas} pieza(s).\n\n` +
+    "Úsalo solo para ventas de prueba/capacitación. No lo uses con ventas reales.\n\n¿Continuar?"
+  );
+  if (!confirmar) return;
+
+  const clave = prompt('Para confirmar, escribe exactamente: LIMPIAR');
+  if (clave !== "LIMPIAR") {
+    setStatus("tableStatus", "Limpieza cancelada. No se modificó nada.", "err");
+    return;
+  }
+
+  setStatus("tableStatus", "Limpiando ventas de capacitación...");
+
+  try {
+    if (piezaIds.length) {
+      const payload = auditarPayload({
+        disponible: true,
+        estado: "Disponible",
+        vendido_por: null,
+        vendido_en: null,
+        precio_venta: null,
+        metodo_pago: null,
+        nota_venta: null
+      });
+
+      const payloadSeguro = extrasDisponibles.auditoriaPiezas
+        ? payload
+        : { disponible: true, estado: "Disponible" };
+
+      const { error } = await avDB.from("piezas").update(payloadSeguro).in("id", piezaIds);
+      if (error) throw error;
+    }
+
+    if (extrasDisponibles.ventas && ventaIds.length) {
+      const { error } = await avDB.from("ventas").delete().in("id", ventaIds);
+      if (error) throw error;
+    }
+
+    await registrarMovimiento("limpiar_ventas_capacitacion", null, {
+      ventas_limpiadas: ventasLimpieza,
+      piezas_republicadas: piezasRepublicadas,
+      total_limpiado: totalMes,
+      mes: claveMesCorte()
+    });
+
+    await cargarPiezas();
+    setStatus("tableStatus", `Ventas de capacitación limpiadas: ${ventasLimpieza} venta(s) y ${piezasRepublicadas} pieza(s) republicadas.`, "ok");
+  } catch (error) {
+    console.error("Error limpiando ventas de capacitación:", error);
+    setStatus("tableStatus", "Error limpiando ventas: " + error.message, "err");
+  }
+}
+
 function exportarExcel() {
   const rows = piezas.map((p) => ({
     ID: p.folio || "",
@@ -1343,6 +1488,8 @@ function registrarEventos() {
   $("resetBtn").addEventListener("click", limpiarFormulario);
   $("excelInput").addEventListener("change", importarExcel);
   $("exportExcel").addEventListener("click", exportarExcel);
+  $("exportMonthlyCut")?.addEventListener("click", exportarCorteMensual);
+  $("clearTrainingSales")?.addEventListener("click", limpiarVentasCapacitacion);
   $("preview").addEventListener("click", manejarAccionPreview);
   $("searchAdmin").addEventListener("input", (event) => {
     filtroTabla = event.target.value;
