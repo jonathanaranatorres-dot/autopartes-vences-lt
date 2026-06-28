@@ -371,9 +371,11 @@
       border-radius: 20px;
       background: linear-gradient(135deg, rgba(255,176,0,.07), rgba(255,255,255,.025));
     }
-    .sales-head { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; margin-bottom: 12px; }
+    .sales-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; margin-bottom: 12px; }
     .sales-head h3 { margin: 0; font-size: 1rem; letter-spacing: -.02em; }
-    .sales-head span { color: var(--muted); font-size: .84rem; }
+    .sales-head span { display: block; margin-top: 3px; color: var(--muted); font-size: .84rem; }
+    .sales-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+    .sales-actions .btn { min-height: 34px; }
     .sales-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-bottom: 12px; }
     .seller-card {
       padding: 12px;
@@ -701,8 +703,14 @@
 
         <div class="sales-box admin-only">
           <div class="sales-head">
-            <h3>Ventas del mes</h3>
-            <span>Por usuario, monto y piezas</span>
+            <div>
+              <h3>Ventas del mes</h3>
+              <span>Por usuario, monto y piezas</span>
+            </div>
+            <div class="sales-actions admin-only">
+              <button id="exportMonthlyCut" class="btn mini" type="button">Corte mensual</button>
+              <button id="clearTrainingSales" class="btn mini danger" type="button">Limpiar pruebas</button>
+            </div>
           </div>
           <div id="ventasResumen">
             <p class="empty-state">Cargando resumen de ventas...</p>
@@ -740,7 +748,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="supabase-config.js"></script>
-  <script src="admin.js?v=descarga-imagenes-1"></script>
+  <script src="admin.js?v=corte-ventas-1"></script>
   <script>
   function aplicarVistaPorRol() {
     const roleEl = document.getElementById("sessionRole");
