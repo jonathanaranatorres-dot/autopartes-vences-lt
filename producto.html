@@ -1,85 +1,155 @@
-<!DOCTYPE html>
-<html lang="es-MX">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Autoparte | AUTOPARTES VENCES</title>
-  <meta name="description" content="Ficha de autoparte en AUTOPARTES VENCES. Revisa fotos, ID, precio y cotiza por WhatsApp." />
-  <meta name="robots" content="index, follow" />
-  <meta name="theme-color" content="#0b1020" />
-  <link rel="canonical" href="https://www.autopartesvences.com/producto.html" />
-  <link rel="icon" type="image/jpeg" href="imagenes/logo-vences.jpeg" />
-  <link rel="stylesheet" href="style-v2.css?v=8" />
-  <script type="application/ld+json" id="productJsonLd">{}</script>
-</head>
-<body>
-  <header class="top-strip">
-    <div class="container top-strip-inner">
-      <span>Autopartes usadas originales · Ecatepec, Estado de México</span>
-      <a href="https://wa.me/525632753982" target="_blank" rel="noopener">WhatsApp: +52 563 275 3982</a>
-    </div>
-  </header>
+/* AUTOPARTES VENCES - Extras para galería y tarjetas Supabase */
+.producto-img-wrap {
+  position: relative;
+  cursor: pointer;
+  overflow: hidden;
+}
 
-  <nav class="nav">
-    <div class="container nav-inner">
-      <a class="brand" href="index.html#inicio" aria-label="Inicio AUTOPARTES VENCES">
-        <img src="imagenes/logo-vences.jpeg" alt="Logo AUTOPARTES VENCES" loading="eager" decoding="async" fetchpriority="high" />
-        <span>AUTOPARTES VENCES</span>
-      </a>
-      <div class="nav-links open">
-        <a href="index.html#catalogo">Catálogo</a>
-        <a href="https://wa.me/525632753982" target="_blank" rel="noopener" class="nav-cta">WhatsApp</a>
-      </div>
-    </div>
-  </nav>
+.producto-img-wrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform .25s ease;
+}
 
-  <main class="product-page-main">
-    <div class="container">
-      <a class="back-link" href="index.html#catalogo">← Regresar al catálogo</a>
+.producto-img-wrap:hover img {
+  transform: scale(1.04);
+}
 
-      <div id="productLoading" class="empty">
-        <h3>Cargando pieza...</h3>
-        <p>Estamos preparando la ficha de esta autoparte.</p>
-      </div>
+.foto-count {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, .72);
+  color: #fff;
+  font-size: .82rem;
+  backdrop-filter: blur(10px);
+}
 
-      <div id="productError" class="empty smart-empty" hidden>
-        <span class="empty-icon">🔎</span>
-        <h3>No encontramos esta pieza</h3>
-        <p></p>
-        <a class="btn primary" href="https://wa.me/525632753982" target="_blank" rel="noopener">Preguntar por WhatsApp</a>
-      </div>
+.producto-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
 
-      <section id="productContent" class="product-page-card" hidden>
-        <div class="product-page-gallery">
-          <div class="product-page-main-image" id="productMainImage"></div>
-          <div class="product-page-thumbs" id="productThumbs"></div>
-        </div>
+.btn-fotos {
+  border: 0;
+  border-radius: 999px;
+  padding: 10px 14px;
+  cursor: pointer;
+  background: #111827;
+  color: #fff;
+  border: 1px solid rgba(255,255,255,.18);
+}
 
-        <article class="product-page-info">
-          <div class="product-topline">
-            <span class="tag id-tag" id="productId"></span>
-            <span class="tag status-tag" id="productStatus"></span>
-          </div>
-          <h1 id="productTitle"></h1>
-          <p class="detail-meta" id="productMeta"></p>
-          <strong class="price" id="productPrice"></strong>
-          <p class="detail-description" id="productDescription"></p>
-          <dl class="detail-list" id="productDetails"></dl>
-          <div class="product-page-actions">
-            <a class="whatsapp-btn" id="productWhatsapp" target="_blank" rel="noopener">Cotizar por WhatsApp</a>
-            <a class="btn secondary" href="index.html#catalogo">Ver más piezas</a>
-          </div>
-          <div class="payment-note">
-            <strong>Pagos aceptados en local de Ecatepec:</strong>
-            <span>Transferencia · TDC · TDD · Efectivo</span>
-          </div>
-        </article>
-      </section>
-    </div>
-  </main>
+.btn-fotos:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
 
-  <a class="whatsapp-float" href="https://wa.me/525632753982" target="_blank" rel="noopener" aria-label="Contactar por WhatsApp">WA</a>
-  <script src="supabase-config.js?v=4" defer></script>
-  <script src="producto.js?v=1" defer></script>
-</body>
-</html>
+.av-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+}
+
+.av-modal.abierto {
+  display: flex;
+}
+
+.av-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,.82);
+  backdrop-filter: blur(12px);
+}
+
+.av-modal-content {
+  position: relative;
+  width: min(1100px, 100%);
+  min-height: min(720px, 82vh);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #090b10;
+  border: 1px solid rgba(255,255,255,.18);
+  border-radius: 24px;
+  overflow: hidden;
+  box-shadow: 0 28px 90px rgba(0,0,0,.55);
+}
+
+.av-modal-content img {
+  width: 100%;
+  max-height: 82vh;
+  object-fit: contain;
+  display: block;
+}
+
+.av-modal-close,
+.av-modal-nav {
+  position: absolute;
+  z-index: 2;
+  border: 0;
+  cursor: pointer;
+  background: rgba(0,0,0,.62);
+  color: #fff;
+  backdrop-filter: blur(10px);
+}
+
+.av-modal-close {
+  top: 14px;
+  right: 14px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.av-modal-nav {
+  top: 50%;
+  transform: translateY(-50%);
+  width: 46px;
+  height: 70px;
+  border-radius: 18px;
+  font-size: 2.6rem;
+}
+
+.av-prev { left: 14px; }
+.av-next { right: 14px; }
+
+.av-modal-title,
+.av-modal-counter {
+  position: absolute;
+  z-index: 2;
+  left: 14px;
+  right: 14px;
+  color: #fff;
+  text-align: center;
+  text-shadow: 0 2px 12px rgba(0,0,0,.7);
+}
+
+.av-modal-title {
+  top: 16px;
+  font-weight: 800;
+  letter-spacing: .04em;
+}
+
+.av-modal-counter {
+  bottom: 16px;
+  color: rgba(255,255,255,.86);
+}
+
+@media (max-width: 640px) {
+  .av-modal-content { min-height: 70vh; border-radius: 18px; }
+  .av-modal-nav { width: 40px; height: 58px; font-size: 2rem; }
+  .av-prev { left: 8px; }
+  .av-next { right: 8px; }
+}

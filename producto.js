@@ -1,267 +1,102 @@
-(() => {
-  const cfg = window.AV_CONFIG || {};
-  const WHATSAPP = cfg.WHATSAPP_NUMBER || "525632753982";
-  const SUPABASE_URL = (cfg.SUPABASE_URL || "").replace(/\/$/, "");
-  const SUPABASE_KEY = cfg.SUPABASE_ANON_KEY || "";
-  const API_TIMEOUT_MS = 14000;
+<!DOCTYPE html>
+<html lang="es-MX">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ficha de autoparte | AUTOPARTES VENCES</title>
+  <meta name="description" content="Consulta fotos reales, precio, ID y compatibilidad de autopartes usadas originales en AUTOPARTES VENCES. Cotiza directo por WhatsApp." />
+  <meta name="robots" content="index, follow" />
+  <meta name="theme-color" content="#0b1020" />
+  <link rel="canonical" href="https://www.autopartesvences.com/producto.html" />
+  <meta property="og:site_name" content="AUTOPARTES VENCES" />
+  <meta property="og:locale" content="es_MX" />
+  <meta property="og:title" content="Ficha de autoparte | AUTOPARTES VENCES" />
+  <meta property="og:description" content="Consulta fotos reales, precio, ID y compatibilidad. Cotiza tu autoparte por WhatsApp." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://www.autopartesvences.com/producto.html" />
+  <meta property="og:image" content="https://www.autopartesvences.com/imagenes/og-autopartes-vences.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:type" content="image/png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Ficha de autoparte | AUTOPARTES VENCES" />
+  <meta name="twitter:description" content="Consulta fotos reales, precio, ID y compatibilidad. Cotiza por WhatsApp." />
+  <meta name="twitter:image" content="https://www.autopartesvences.com/imagenes/og-autopartes-vences.png" />
+  <link rel="icon" type="image/png" sizes="48x48" href="/imagenes/favicon-48.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/imagenes/favicon-192.png" />
+  <link rel="icon" type="image/png" sizes="512x512" href="/imagenes/favicon-512.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/imagenes/favicon-180.png" />
+  <link rel="stylesheet" href="style-v2.css?v=8" />
+  <script type="application/ld+json" id="productJsonLd">{}</script>
+</head>
+<body>
+  <header class="top-strip">
+    <div class="container top-strip-inner">
+      <span>Autopartes usadas originales · Ecatepec, Estado de México</span>
+      <a href="https://wa.me/525632753982" target="_blank" rel="noopener">WhatsApp: +52 563 275 3982</a>
+    </div>
+  </header>
 
-  let producto = null;
-  let fotoActiva = 0;
+  <nav class="nav">
+    <div class="container nav-inner">
+      <a class="brand" href="index.html#inicio" aria-label="Inicio AUTOPARTES VENCES">
+        <img src="imagenes/logo-vences.jpeg" alt="Logo AUTOPARTES VENCES" loading="eager" decoding="async" fetchpriority="high" />
+        <span>AUTOPARTES VENCES</span>
+      </a>
+      <div class="nav-links open">
+        <a href="index.html#catalogo">Catálogo</a>
+        <a href="https://wa.me/525632753982" target="_blank" rel="noopener" class="nav-cta">WhatsApp</a>
+      </div>
+    </div>
+  </nav>
 
-  const id = (nombre) => document.getElementById(nombre);
-  const limpiar = (valor) => String(valor ?? "").trim();
-  const normalizar = (texto) => limpiar(texto).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  <main class="product-page-main">
+    <div class="container">
+      <a class="back-link" href="index.html#catalogo">← Regresar al catálogo</a>
 
-  document.addEventListener("DOMContentLoaded", iniciar);
+      <div id="productLoading" class="empty">
+        <h3>Cargando pieza...</h3>
+        <p>Estamos preparando la ficha de esta autoparte.</p>
+      </div>
 
-  async function iniciar() {
-    const productoId = limpiar(new URLSearchParams(window.location.search).get("id"));
-    if (!productoId) {
-      mostrarError("No recibimos el ID de la pieza. Regresa al catálogo y abre una autoparte.");
-      return;
-    }
+      <div id="productError" class="empty smart-empty" hidden>
+        <span class="empty-icon">🔎</span>
+        <h3>No encontramos esta pieza</h3>
+        <p></p>
+        <a class="btn primary" href="https://wa.me/525632753982" target="_blank" rel="noopener">Preguntar por WhatsApp</a>
+      </div>
 
-    try {
-      producto = await cargarProducto(productoId);
-      if (!producto) {
-        mostrarError(`No encontramos la pieza con ID ${productoId}. Escríbenos por WhatsApp para revisarla.`);
-        return;
-      }
-      renderProducto(producto);
-    } catch (error) {
-      console.error("No se pudo cargar la pieza:", error);
-      mostrarError("No pudimos cargar esta pieza. Escríbenos por WhatsApp para confirmar disponibilidad.");
-    }
-  }
+      <section id="productContent" class="product-page-card" hidden>
+        <div class="product-page-gallery">
+          <div class="product-page-main-image" id="productMainImage"></div>
+          <div class="product-page-thumbs" id="productThumbs"></div>
+        </div>
 
-  async function cargarProducto(productoId) {
-    const desdeSupabase = await cargarProductoSupabase(productoId).catch(() => null);
-    if (desdeSupabase) return desdeSupabase;
-    return await cargarProductoRespaldo(productoId);
-  }
+        <article class="product-page-info">
+          <div class="product-topline">
+            <span class="tag id-tag" id="productId"></span>
+            <span class="tag status-tag" id="productStatus"></span>
+          </div>
+          <h1 id="productTitle"></h1>
+          <p class="detail-meta" id="productMeta"></p>
+          <strong class="price" id="productPrice"></strong>
+          <p class="detail-description" id="productDescription"></p>
+          <dl class="detail-list" id="productDetails"></dl>
+          <div class="product-page-actions">
+            <a class="whatsapp-btn" id="productWhatsapp" target="_blank" rel="noopener">Cotizar por WhatsApp</a>
+            <a class="btn secondary" href="index.html#catalogo">Ver más piezas</a>
+          </div>
+          <div class="payment-note">
+            <strong>Pagos aceptados en local de Ecatepec:</strong>
+            <span>Transferencia · TDC · TDD · Efectivo</span>
+          </div>
+        </article>
+      </section>
+    </div>
+  </main>
 
-  async function cargarProductoSupabase(productoId) {
-    if (!SUPABASE_URL || !SUPABASE_KEY || SUPABASE_URL.includes("AQUI") || SUPABASE_KEY.includes("AQUI")) return null;
-
-    const params = new URLSearchParams({
-      select: "id,folio,pieza,marca,modelo,anio,color,lado,estado,precio,numero_parte,descripcion,disponible,vendido_en",
-      limit: "1"
-    });
-    params.set("or", `(folio.eq.${productoId},id.eq.${productoId})`);
-
-    const piezas = await fetchJSON(`${SUPABASE_URL}/rest/v1/piezas?${params.toString()}`);
-    const row = Array.isArray(piezas) ? piezas[0] : null;
-    if (!row || row.disponible === false || row.vendido_en) return null;
-
-    const p = normalizarProducto(row, "supabase");
-    if (p.uuid) {
-      const fotos = await cargarFotosSupabase(p.uuid).catch(() => []);
-      if (fotos.length) {
-        p.fotos = fotos.map((foto) => prepararUrlFoto(foto.url)).filter(Boolean);
-        p.fotoCount = p.fotos.length;
-      }
-    }
-    return p;
-  }
-
-  async function cargarFotosSupabase(uuid) {
-    const params = new URLSearchParams({ select: "url,orden", pieza_id: `eq.${uuid}`, order: "orden.asc" });
-    const fotos = await fetchJSON(`${SUPABASE_URL}/rest/v1/fotos?${params.toString()}`);
-    return Array.isArray(fotos) ? fotos : [];
-  }
-
-  async function cargarProductoRespaldo(productoId) {
-    const response = await fetch(`datos.json?v=${Date.now()}`, { cache: "no-store" });
-    if (!response.ok) return null;
-    const data = await response.json();
-    if (!Array.isArray(data)) return null;
-    const buscado = normalizar(productoId);
-    const row = data.find((item) => normalizar(item.id || item.folio || item.uuid) === buscado);
-    return row ? normalizarProducto(row, "respaldo") : null;
-  }
-
-  async function fetchJSON(url) {
-    const controller = new AbortController();
-    const timer = window.setTimeout(() => controller.abort(), API_TIMEOUT_MS);
-    try {
-      const response = await fetch(url, {
-        signal: controller.signal,
-        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
-      });
-      if (!response.ok) throw new Error(`Error ${response.status}`);
-      return await response.json();
-    } finally {
-      window.clearTimeout(timer);
-    }
-  }
-
-  function normalizarProducto(row, origen = "supabase") {
-    const uuid = limpiar(row.uuid || row.id || "");
-    const folio = limpiar(row.folio || row.id || "");
-    return {
-      uuid,
-      id: folio || uuid,
-      pieza: limpiar(row.pieza || row.Pieza),
-      marca: limpiar(row.marca || row.Marca),
-      modelo: limpiar(row.modelo || row.Modelo),
-      anio: limpiar(row.anio || row.año || row.Anio || row.Año),
-      color: limpiar(row.color || row.Color),
-      lado: limpiar(row.lado || row.Lado),
-      estado: limpiar(row.estado || row.Estado) || "Disponible",
-      precio: row.precio ?? row.Precio,
-      numeroParte: limpiar(row.numero_parte || row.numeroParte || row["numero parte"] || row["No. Parte"]),
-      descripcion: limpiar(row.descripcion || row.notas || row.Notas || row.descripcionSeo),
-      fotos: fotosDesdeRow(row, origen)
-    };
-  }
-
-  function fotosDesdeRow(row, origen) {
-    if (Array.isArray(row.fotos)) return row.fotos.filter((foto) => foto && foto.url).sort((a, b) => (a.orden || 0) - (b.orden || 0)).map((foto) => prepararUrlFoto(foto.url)).filter(Boolean);
-    if (origen === "respaldo") return [row.fotoPrincipal, row.foto2, row.foto3, row.foto4, row.foto5, row.foto6, row.link].map(prepararUrlFoto).filter(Boolean);
-    return [];
-  }
-
-  function prepararUrlFoto(url) {
-    const texto = limpiar(url);
-    if (!texto) return "";
-    const driveFile = texto.match(/drive\.google\.com\/file\/d\/([^/]+)/i);
-    if (driveFile?.[1]) return `https://drive.google.com/thumbnail?id=${encodeURIComponent(driveFile[1])}&sz=w1400`;
-    const driveOpen = texto.match(/[?&]id=([^&]+)/i);
-    if (texto.includes("drive.google.com") && driveOpen?.[1]) return `https://drive.google.com/thumbnail?id=${encodeURIComponent(driveOpen[1])}&sz=w1400`;
-    return texto;
-  }
-
-  function renderProducto(p) {
-    document.title = `${tituloProducto(p)} | AUTOPARTES VENCES`;
-    const meta = document.querySelector('meta[name="description"]');
-    if (meta) meta.content = `${tituloProducto(p)} en AUTOPARTES VENCES. Confirma disponibilidad, compatibilidad y precio por WhatsApp.`;
-
-    id("productId").textContent = `ID: ${p.id || "N/A"}`;
-    id("productStatus").textContent = p.estado || "Disponible";
-    id("productTitle").textContent = tituloProducto(p);
-    id("productMeta").textContent = [p.marca, p.modelo, p.anio].filter(Boolean).join(" · ") || "Autoparte disponible";
-    id("productPrice").textContent = formatearPrecio(p.precio);
-    id("productDescription").textContent = p.descripcion || "Sin descripción adicional. Te recomendamos confirmar compatibilidad por WhatsApp antes de cerrar la compra.";
-    id("productDetails").innerHTML = detalleHTML("Pieza", p.pieza) + detalleHTML("Marca", p.marca) + detalleHTML("Modelo", p.modelo) + detalleHTML("Año", p.anio) + detalleHTML("Lado", mostrarLadoHumano(p.lado)) + detalleHTML("Color", p.color) + detalleHTML("No. parte", p.numeroParte) + detalleHTML("Estado", p.estado);
-    id("productWhatsapp").href = crearWhatsAppProducto(p);
-
-    pintarFoto();
-    pintarMiniaturas();
-    pintarSEO(p);
-    id("productLoading").hidden = true;
-    id("productContent").hidden = false;
-  }
-
-  function pintarFoto() {
-    const wrap = id("productMainImage");
-    if (!wrap || !producto) return;
-    if (producto.fotos.length) {
-      wrap.innerHTML = `<img src="${escaparAttr(producto.fotos[fotoActiva])}" alt="${escaparAttr(tituloProducto(producto))}" loading="eager" decoding="async">`;
-    } else {
-      wrap.innerHTML = `<div class="empty"><h3>Sin foto publicada</h3><p>Pregunta por WhatsApp para confirmar fotos y estado.</p></div>`;
-    }
-  }
-
-  function pintarMiniaturas() {
-    const cont = id("productThumbs");
-    if (!cont || !producto) return;
-    cont.innerHTML = "";
-    producto.fotos.forEach((url, index) => {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = index === fotoActiva ? "activo" : "";
-      btn.innerHTML = `<img src="${escaparAttr(url)}" alt="Foto ${index + 1}" loading="lazy" decoding="async">`;
-      btn.addEventListener("click", () => { fotoActiva = index; pintarFoto(); pintarMiniaturas(); });
-      cont.appendChild(btn);
-    });
-  }
-
-  function pintarSEO(p) {
-    id("productJsonLd").textContent = JSON.stringify({
-      "@context": "https://schema.org",
-      "@type": "Product",
-      name: tituloProducto(p),
-      sku: p.id || undefined,
-      brand: p.marca ? { "@type": "Brand", name: p.marca } : undefined,
-      image: p.fotos[0] || "https://www.autopartesvences.com/imagenes/logo-vences.jpeg",
-      description: p.descripcion || `Autoparte usada original ${tituloProducto(p)} disponible en AUTOPARTES VENCES.`,
-      offers: {
-        "@type": "Offer",
-        priceCurrency: "MXN",
-        availability: "https://schema.org/InStock",
-        url: window.location.href,
-        price: Number(p.precio || 0) || undefined
-      }
-    });
-  }
-
-  function mostrarError(mensaje) {
-    id("productLoading").hidden = true;
-    const error = id("productError");
-    error.hidden = false;
-    error.querySelector("p").textContent = mensaje;
-    error.querySelector("a").href = crearWhatsAppBusqueda(mensaje);
-  }
-
-  function tituloProducto(p) {
-    const lado = p.lado ? mostrarLadoHumano(p.lado) : "";
-    return [p.pieza, lado !== "N/A" ? lado : "", p.marca, p.modelo, p.anio].filter(Boolean).join(" ") || "Autoparte disponible";
-  }
-
-  function mostrarLadoHumano(lado) {
-    const original = limpiar(lado);
-    const t = normalizar(original).replace(/[^a-z0-9ñ]+/g, " ");
-    if (!original) return "N/A";
-    const tieneDelantero = /\bdelanter|\bfront/.test(t) || /^d[-\s/]/i.test(original);
-    const tieneTrasero = /\btraser|\bposterior|\bback/.test(t) || /^t[-\s/]/i.test(original);
-    const tieneDerecho = /\bdd\b|\bderech|\brh\b/.test(t) || /d[-\s]?d/i.test(original);
-    const tieneIzquierdo = /\bdi\b|\bizquierd|\blh\b/.test(t) || /d[-\s]?i|i[-\s]?d/i.test(original);
-    const partes = [];
-    if (tieneDelantero) partes.push("Delantero");
-    if (tieneTrasero) partes.push("Trasero");
-    if (tieneDerecho) partes.push("derecho");
-    if (tieneIzquierdo) partes.push("izquierdo");
-    return partes.length ? capitalizar(partes.join(" ")) : original;
-  }
-
-  function crearWhatsAppProducto(p) {
-    const mensaje = [
-      "Hola, quiero revisar esta autoparte:",
-      "",
-      `ID: ${p.id || "N/A"}`,
-      `Pieza: ${tituloProducto(p)}`,
-      `Número de parte: ${p.numeroParte || "N/A"}`,
-      `Precio: ${formatearPrecio(p.precio)}`,
-      `Link: ${window.location.href}`,
-      "",
-      "Entiendo que están ubicados en Ecatepec, Estado de México.",
-      "¿Me puedes confirmar disponibilidad, compatibilidad y forma de pago?"
-    ].join("\n");
-    return `https://wa.me/${WHATSAPP}?text=${encodeURIComponent(mensaje)}`;
-  }
-
-  function crearWhatsAppBusqueda(busqueda) {
-    const mensaje = ["Hola, busco una autoparte que no encontré en el catálogo.", limpiar(busqueda), "¿Me puedes ayudar a revisar si la tienen disponible?"].filter(Boolean).join("\n");
-    return `https://wa.me/${WHATSAPP}?text=${encodeURIComponent(mensaje)}`;
-  }
-
-  function detalleHTML(label, value) {
-    return `<div><dt>${escapar(label)}</dt><dd>${escapar(value || "N/A")}</dd></div>`;
-  }
-
-  function formatearPrecio(precio) {
-    const numero = Number(precio || 0);
-    if (!numero) return "Consultar";
-    return new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 }).format(numero);
-  }
-
-  function capitalizar(texto) {
-    const limpio = limpiar(texto);
-    return limpio ? limpio.charAt(0).toUpperCase() + limpio.slice(1) : "";
-  }
-
-  function escapar(texto) {
-    return String(texto ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
-  }
-  function escaparAttr(texto) { return escapar(texto).replaceAll("`", "&#096;"); }
-})();
+  <a class="whatsapp-float" href="https://wa.me/525632753982" target="_blank" rel="noopener" aria-label="Contactar por WhatsApp">WA</a>
+  <script src="supabase-config.js?v=4" defer></script>
+  <script src="producto.js?v=1" defer></script>
+</body>
+</html>
