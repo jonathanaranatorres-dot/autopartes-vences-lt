@@ -380,12 +380,36 @@
     return p._textoBusqueda;
   }
 
+  function tokensProductoBusqueda(p) {
+    if (p._tokensBusqueda) return p._tokensBusqueda;
+    p._tokensBusqueda = [...new Set(textoProducto(p).split(/\s+/).filter(Boolean))];
+    return p._tokensBusqueda;
+  }
+
+  function tokenAceptaCoincidenciaParcial(token) {
+    return /^[a-zñ]{3,}$/.test(token);
+  }
+
+  function coincideTokenBusqueda(token, texto, tokensProducto) {
+    if (texto.includes(` ${token} `)) return true;
+
+    if (!tokenAceptaCoincidenciaParcial(token)) return false;
+
+    return tokensProducto.some((tokenProducto) =>
+      tokenProducto.length > token.length && tokenProducto.startsWith(token)
+    );
+  }
+
   function coincideBusquedaInteligente(producto, busqueda) {
     const grupos = gruposBusqueda(busqueda);
     if (!grupos.length) return true;
 
     const texto = ` ${textoProducto(producto)} `;
-    return grupos.every((grupo) => grupo.some((token) => texto.includes(` ${token} `)));
+    const tokensProducto = tokensProductoBusqueda(producto);
+
+    return grupos.every((grupo) =>
+      grupo.some((token) => coincideTokenBusqueda(token, texto, tokensProducto))
+    );
   }
 
   function getFiltros() {
