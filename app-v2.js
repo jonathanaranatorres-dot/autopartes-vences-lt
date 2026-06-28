@@ -257,15 +257,138 @@
       .toLowerCase();
   }
 
+  const PALABRAS_RUIDO_BUSQUEDA = new Set([
+    "de", "del", "la", "las", "el", "los", "un", "una", "unos", "unas",
+    "para", "por", "con", "sin", "en", "al", "a", "y", "o", "que", "pieza", "piezas"
+  ]);
+
+  const GRUPOS_SINONIMOS_BUSQUEDA = [
+    ["faro", "faros", "lampara", "lamparas", "luz", "luces", "delantera", "delantero"],
+    ["calavera", "calaveras", "stop", "stops", "mica", "micas", "trasera", "trasero"],
+    ["defensa", "defensas", "facia", "facias", "fascia", "fascias", "parachoques"],
+    ["cofre", "capot", "capo", "bonete"],
+    ["salpicadera", "salpicaderas", "lodera", "loderas", "guardafango", "guardafangos"],
+    ["retrovisor", "retrovisores", "espejo", "espejos"],
+    ["parrilla", "parrillas", "rejilla", "rejillas", "grilla"],
+    ["puerta", "puertas", "puuerta", "portezuela"],
+    ["rin", "rines", "llanta", "llantas", "rueda", "ruedas"],
+    ["direccional", "direccionales", "cuarto", "cuartos", "intermitente", "intermitentes"],
+    ["tolva", "tolvas", "guardapolvo", "guardapolvos"],
+    ["radiador", "radiadores", "condensador", "condensadores"],
+    ["fascia", "facia", "defensa"],
+    ["derecho", "derecha", "dd", "rh"],
+    ["izquierdo", "izquierda", "di", "lh"]
+  ];
+
+  const MAPA_SINONIMOS_BUSQUEDA = crearMapaSinonimosBusqueda();
+
+  function crearMapaSinonimosBusqueda() {
+    const mapa = new Map();
+    GRUPOS_SINONIMOS_BUSQUEDA.forEach((grupo) => {
+      const normalizados = [...new Set(grupo.map(normalizar).filter(Boolean))];
+      normalizados.forEach((token) => mapa.set(token, normalizados));
+    });
+    return mapa;
+  }
+
+  function prepararTextoParaTokens(texto) {
+    return normalizar(texto)
+      .replace(/\bd\s*[-/]\s*d\b/g, " dd ")
+      .replace(/\bd\s*[-/]\s*i\b/g, " di ")
+      .replace(/\bi\s*[-/]\s*d\b/g, " di ")
+      .replace(/\bder\b/g, " derecho ")
+      .replace(/\bizq\b/g, " izquierdo ")
+      .replace(/[^a-z0-9ñ]+/g, " ");
+  }
+
+  function tokenizarBusqueda(texto) {
+    return prepararTextoParaTokens(texto)
+      .split(/\s+/)
+      .map((token) => token.trim())
+      .filter((token) => token && !PALABRAS_RUIDO_BUSQUEDA.has(token) && (token.length > 1 || /^\d+$/.test(token)))
+      .map(corregirTokenBusqueda);
+  }
+
+  function corregirTokenBusqueda(token) {
+    const correcciones = {
+      lampara: "lampara",
+      lamparas: "lamparas",
+      puuerta: "puerta",
+      fasia: "facia",
+      facias: "facia",
+      calabera: "calavera",
+      calaberas: "calavera",
+      tuson: "tucson",
+      tucon: "tucson",
+      hiunday: "hyundai",
+      hundai: "hyundai",
+      chevroleth: "chevrolet",
+      chevy: "chevrolet"
+    };
+    return correcciones[token] || token;
+  }
+
+  function expandirTokenBusqueda(token) {
+    const grupo = MAPA_SINONIMOS_BUSQUEDA.get(token) || [];
+    const singular = singularizarTokenBusqueda(token);
+    const extra = singular && singular !== token ? [singular, ...(MAPA_SINONIMOS_BUSQUEDA.get(singular) || [])] : [];
+    return [...new Set([token, ...grupo, ...extra])];
+  }
+
+  function singularizarTokenBusqueda(token) {
+    if (token === "luces") return "luz";
+    if (token === "rines") return "rin";
+    if (token.endsWith("es") && token.length > 5) return token.slice(0, -2);
+    if (token.endsWith("s") && token.length > 4) return token.slice(0, -1);
+    return token;
+  }
+
+  function gruposBusqueda(texto) {
+    return tokenizarBusqueda(texto).map(expandirTokenBusqueda);
+  }
+
+  function textoLadoBusqueda(lado) {
+    const texto = prepararTextoParaTokens(lado);
+    if (/\bdd\b|\bderech/.test(texto)) return "derecho derecha dd rh";
+    if (/\bdi\b|\bizquierd/.test(texto)) return "izquierdo izquierda di lh";
+    return texto;
+  }
+
   function textoProducto(p) {
-    return normalizar([
-      p.id, p.pieza, p.marca, p.modelo, p.anio, p.color, p.lado, p.estado, p.numeroParte, p.descripcion
-    ].join(" "));
+    if (p._textoBusqueda) return p._textoBusqueda;
+
+    const textoBase = [
+      p.id,
+      p.pieza,
+      p.marca,
+      p.modelo,
+      p.anio,
+      extraerAnios(p.anio).join(" "),
+      p.color,
+      p.lado,
+      textoLadoBusqueda(p.lado),
+      p.estado,
+      p.numeroParte,
+      p.descripcion
+    ].join(" ");
+
+    const tokens = tokenizarBusqueda(textoBase);
+    const textoExpandido = tokens.flatMap(expandirTokenBusqueda).join(" ");
+    p._textoBusqueda = `${prepararTextoParaTokens(textoBase)} ${textoExpandido}`;
+    return p._textoBusqueda;
+  }
+
+  function coincideBusquedaInteligente(producto, busqueda) {
+    const grupos = gruposBusqueda(busqueda);
+    if (!grupos.length) return true;
+
+    const texto = textoProducto(producto);
+    return grupos.every((grupo) => grupo.some((token) => texto.includes(token)));
   }
 
   function getFiltros() {
     return {
-      busqueda: normalizar(id("searchInput")?.value || ""),
+      busqueda: id("searchInput")?.value || "",
       pieza: id("piezaSelect")?.value || "",
       marca: id("marcaSelect")?.value || "",
       modelo: id("modeloSelect")?.value || "",
@@ -278,7 +401,7 @@
     const f = getFiltros();
 
     filtrados = productos.filter((p) => {
-      const coincideBusqueda = !f.busqueda || textoProducto(p).includes(f.busqueda);
+      const coincideBusqueda = coincideBusquedaInteligente(p, f.busqueda);
       const coincidePieza = !f.pieza || p.pieza === f.pieza;
       const coincideMarca = !f.marca || p.marca === f.marca;
       const coincideModelo = !f.modelo || p.modelo === f.modelo;
@@ -407,8 +530,8 @@
     if (!total) {
       grid.innerHTML = `
         <div class="empty">
-          <h3>No encontramos piezas con esos filtros</h3>
-          <p>Prueba con otra búsqueda o escríbenos por WhatsApp para revisar disponibilidad.</p>
+          <h3>No encontramos piezas con esa búsqueda</h3>
+          <p>Prueba con menos palabras, otro nombre de la pieza o escríbenos por WhatsApp para revisar disponibilidad.</p>
         </div>`;
       actualizarBotonCargarMas(0, 0);
       setStatus("No hay resultados con esos filtros.", "");
