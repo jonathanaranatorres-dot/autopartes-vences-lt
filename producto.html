@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="es-MX">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Autoparte | AUTOPARTES VENCES</title>
+  <meta name="description" content="Ficha de autoparte en AUTOPARTES VENCES. Revisa fotos, ID, precio y cotiza por WhatsApp." />
+  <meta name="robots" content="index, follow" />
+  <meta name="theme-color" content="#0b1020" />
+  <link rel="canonical" href="https://www.autopartesvences.com/producto.html" />
+  <link rel="icon" type="image/jpeg" href="imagenes/logo-vences.jpeg" />
+  <link rel="stylesheet" href="style-v2.css?v=8" />
+  <script type="application/ld+json" id="productJsonLd">{}</script>
+</head>
+<body>
+  <header class="top-strip">
+    <div class="container top-strip-inner">
+      <span>Autopartes usadas originales · Ecatepec, Estado de México</span>
+      <a href="https://wa.me/525632753982" target="_blank" rel="noopener">WhatsApp: +52 563 275 3982</a>
+    </div>
+  </header>
+
+  <nav class="nav">
+    <div class="container nav-inner">
+      <a class="brand" href="index.html#inicio" aria-label="Inicio AUTOPARTES VENCES">
+        <img src="imagenes/logo-vences.jpeg" alt="Logo AUTOPARTES VENCES" loading="eager" decoding="async" fetchpriority="high" />
+        <span>AUTOPARTES VENCES</span>
+      </a>
+      <div class="nav-links open">
+        <a href="index.html#catalogo">Catálogo</a>
+        <a href="https://wa.me/525632753982" target="_blank" rel="noopener" class="nav-cta">WhatsApp</a>
+      </div>
+    </div>
+  </nav>
+
+  <main class="product-page-main">
+    <div class="container">
+      <a class="back-link" href="index.html#catalogo">← Regresar al catálogo</a>
+
+      <div id="productLoading" class="empty">
+        <h3>Cargando pieza...</h3>
+        <p>Estamos preparando la ficha de esta autoparte.</p>
+      </div>
+
+      <div id="productError" class="empty smart-empty" hidden>
+        <span class="empty-icon">🔎</span>
+        <h3>No encontramos esta pieza</h3>
+        <p></p>
+        <a class="btn primary" href="https://wa.me/525632753982" target="_blank" rel="noopener">Preguntar por WhatsApp</a>
+      </div>
+
+      <section id="productContent" class="product-page-card" hidden>
+        <div class="product-page-gallery">
+          <div class="product-page-main-image" id="productMainImage"></div>
+          <div class="product-page-thumbs" id="productThumbs"></div>
+        </div>
+
+        <article class="product-page-info">
+          <div class="product-topline">
+            <span class="tag id-tag" id="productId"></span>
+            <span class="tag status-tag" id="productStatus"></span>
+          </div>
+          <h1 id="productTitle"></h1>
+          <p class="detail-meta" id="productMeta"></p>
+          <strong class="price" id="productPrice"></strong>
+          <p class="detail-description" id="productDescription"></p>
+          <dl class="detail-list" id="productDetails"></dl>
+          <div class="product-page-actions">
+            <a class="whatsapp-btn" id="productWhatsapp" target="_blank" rel="noopener">Cotizar por WhatsApp</a>
+            <a class="btn secondary" href="index.html#catalogo">Ver más piezas</a>
+          </div>
+          <div class="payment-note">
+            <strong>Pagos aceptados en local de Ecatepec:</strong>
+            <span>Transferencia · TDC · TDD · Efectivo</span>
+          </div>
+        </article>
+      </section>
+    </div>
+  </main>
+
+  <a class="whatsapp-float" href="https://wa.me/525632753982" target="_blank" rel="noopener" aria-label="Contactar por WhatsApp">WA</a>
+  <script src="supabase-config.js?v=4" defer></script>
+  <script src="producto.js?v=1" defer></script>
+</body>
+</html>
