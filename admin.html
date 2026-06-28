@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="es-MX">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin | AUTOPARTES VENCES</title>
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="preconnect" href="https://cdn.jsdelivr.net">
+  <style>
+    :root {
+      --bg: #07080d;
+      --bg-2: #0c111b;
+      --panel: rgba(16, 22, 34, .9);
+      --panel-2: rgba(22, 31, 47, .94);
+      --panel-3: #0d121b;
+      --text: #f8fafc;
+      --muted: #9aa8bd;
+      --line: rgba(255,255,255,.12);
+      --line-strong: rgba(255,255,255,.2);
+      --accent: #e53b2c;
+      --accent-dark: #9f2118;
+      --accent-2: #ffb000;
+      --accent-soft: rgba(229,59,44,.16);
+      --gold-soft: rgba(255,176,0,.12);
+      --ok: #2ecc71;
+      --danger: #ff4d4d;
+      --shadow: 0 28px 90px rgba(0,0,0,.42);
+      --shadow-soft: 0 18px 50px rgba(0,0,0,.24);
+      --radius: 24px;
+      --radius-sm: 16px;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      min-height: 100vh;
+      margin: 0;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 10% -10%, rgba(229,59,44,.34), transparent 34%),
+        radial-gradient(circle at 92% 4%, rgba(255,176,0,.18), transparent 28%),
+        linear-gradient(135deg, #07080d 0%, #0b1019 42%, #090b10 100%);
+      overflow-x: hidden;
+    }
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background:
+        linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px);
+      background-size: 54px 54px;
+      mask-image: linear-gradient(to bottom, rgba(0,0,0,.65), transparent 72%);
+    }
+    body::after {
+      content: "";
+      position: fixed;
+      inset: auto -18% -35% -18%;
+      height: 48vh;
+      pointer-events: none;
+      background: radial-gradient(ellipse at center, rgba(229,59,44,.16), transparent 64%);
+      filter: blur(12px);
+    }
+    ::selection { background: rgba(255,176,0,.35); }
+    a { color: inherit; text-decoration: none; }
+    button, input, select, textarea { font: inherit; }
+    .wrap { width: min(1240px, calc(100% - 32px)); margin: 0 auto; position: relative; }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      border-bottom: 1px solid var(--line);
+      background: rgba(7, 8, 13, .76);
+      backdrop-filter: blur(18px) saturate(1.25);
+      box-shadow: 0 10px 40px rgba(0,0,0,.22);
+    }
+    .topbar-inner { min-height: 82px; display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+    .brand { display: flex; align-items: center; gap: 13px; }
+    .brand-logo {
+      width: 48px;
+      height: 48px;
+      object-fit: cover;
+      border-radius: 16px;
+      border: 1px solid var(--line-strong);
+      box-shadow: 0 14px 34px rgba(0,0,0,.38);
+    }
+    .brand-copy { display: flex; flex-direction: column; gap: 4px; }
+    .brand strong { letter-spacing: .09em; font-size: .98rem; }
+    .brand span { color: var(--muted); font-size: .92rem; }
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; align-items: center; }
+    .session-chip {
+      display: inline-flex;
+      flex-direction: column;
+      justify-content: center;
+      min-height: 43px;
+      max-width: 260px;
+      padding: 8px 13px;
+      border: 1px solid rgba(46,204,113,.28);
+      border-radius: 14px;
+      background: rgba(46,204,113,.075);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
+    }
+    .session-chip span { color: #dfffea; font-weight: 900; font-size: .88rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .session-chip small { color: var(--muted); font-size: .74rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    .btn {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 43px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 11px 16px;
+      cursor: pointer;
+      color: var(--text);
+      background: linear-gradient(180deg, rgba(255,255,255,.075), rgba(255,255,255,.035));
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.06), 0 10px 24px rgba(0,0,0,.16);
+      transition: transform .18s ease, border-color .18s ease, background .18s ease, box-shadow .18s ease, opacity .18s ease;
+      user-select: none;
+    }
+    .btn:hover { transform: translateY(-2px); border-color: rgba(255,255,255,.24); box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 16px 30px rgba(0,0,0,.24); }
+    .btn:active { transform: translateY(0); }
+    .btn.primary {
+      background: linear-gradient(135deg, #ff4a38, var(--accent-dark));
+      border-color: rgba(255,255,255,.18);
+      box-shadow: 0 16px 34px rgba(229,59,44,.24);
+      font-weight: 800;
+    }
+    .btn.gold {
+      background: linear-gradient(135deg, #ffd66b, var(--accent-2) 48%, #c26b00);
+      color: #171008;
+      font-weight: 900;
+      border-color: rgba(255,236,180,.55);
+      box-shadow: 0 16px 34px rgba(255,176,0,.2);
+    }
+    .btn.danger { background: rgba(255,77,77,.1); border-color: rgba(255,77,77,.42); color: #ffd6d6; }
+    .btn:disabled { opacity: .55; cursor: not-allowed; transform: none; box-shadow: none; }
+
+    .login {
+      position: relative;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 28px;
+    }
+    .login::before {
+      content: "";
+      position: absolute;
+      width: min(620px, 90vw);
+      aspect-ratio: 1;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(255,176,0,.16), rgba(229,59,44,.16) 42%, transparent 70%);
+      filter: blur(4px);
+      animation: breathe 7s ease-in-out infinite;
+    }
+    .login-card {
+      position: relative;
+      width: min(460px, 100%);
+      padding: 30px;
+      overflow: hidden;
+      border: 1px solid var(--line-strong);
+      border-radius: 30px;
+      background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.035));
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(18px);
+      animation: rise .45s ease both;
+    }
+    .login-card::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: linear-gradient(135deg, rgba(255,255,255,.13), transparent 34%);
+    }
+    .login-hero { position: relative; z-index: 1; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 20px; }
+    .login-logo {
+      width: 76px;
+      height: 76px;
+      object-fit: cover;
+      border-radius: 22px;
+      border: 1px solid var(--line-strong);
+      box-shadow: 0 18px 42px rgba(0,0,0,.35);
+    }
+    .login-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      border: 1px solid rgba(255,176,0,.36);
+      border-radius: 999px;
+      padding: 8px 12px;
+      color: #ffe4a0;
+      background: var(--gold-soft);
+      font-size: .84rem;
+      font-weight: 800;
+      letter-spacing: .03em;
+    }
+    .login-card h1, .login-card p, .login-card form, .login-card .status { position: relative; z-index: 1; }
+    .login-card h1 { margin: 0 0 8px; font-size: clamp(2rem, 5vw, 2.7rem); line-height: 1; letter-spacing: -.05em; }
+    .login-card p { margin: 0 0 22px; color: var(--muted); line-height: 1.5; }
+
+    .grid { display: grid; grid-template-columns: minmax(340px, 440px) 1fr; gap: 22px; padding: 28px 0 60px; }
+    .panel {
+      position: relative;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 20px;
+      background: linear-gradient(180deg, rgba(255,255,255,.072), rgba(255,255,255,.035)), var(--panel);
+      box-shadow: var(--shadow-soft);
+      backdrop-filter: blur(14px);
+      animation: rise .36s ease both;
+    }
+    .panel::before {
+      content: "";
+      position: absolute;
+      inset: 0 0 auto 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2), transparent);
+      opacity: .85;
+    }
+    .panel h2 { margin: 4px 0 14px; letter-spacing: -.03em; }
+    .panel .hint { margin: -4px 0 18px; color: var(--muted); line-height: 1.45; }
+
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .field { display: flex; flex-direction: column; gap: 7px; }
+    .field.full, .section-title { grid-column: 1 / -1; }
+    .section-title {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      margin-top: 4px;
+      padding-top: 6px;
+      color: #ffe2a2;
+      font-size: .79rem;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: .12em;
+    }
+    .section-title span {
+      display: inline-grid;
+      place-items: center;
+      width: 24px;
+      height: 24px;
+      border-radius: 999px;
+      color: #170f08;
+      background: linear-gradient(135deg, #ffd66b, var(--accent-2));
+      letter-spacing: 0;
+      font-size: .72rem;
+    }
+    label { color: var(--muted); font-size: .88rem; }
+    input, select, textarea {
+      width: 100%;
+      color: var(--text);
+      background: rgba(8, 13, 21, .86);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 12px 13px;
+      outline: none;
+      transition: border-color .18s ease, box-shadow .18s ease, background .18s ease, transform .18s ease;
+    }
+    input::placeholder, textarea::placeholder { color: rgba(154,168,189,.67); }
+    input:focus, select:focus, textarea:focus {
+      border-color: rgba(255,176,0,.68);
+      background: rgba(12, 18, 29, .96);
+      box-shadow: 0 0 0 4px rgba(255,176,0,.09), 0 12px 26px rgba(0,0,0,.16);
+    }
+    textarea { min-height: 94px; resize: vertical; }
+    .checkrow {
+      flex-direction: row;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 13px;
+      border: 1px solid rgba(46,204,113,.24);
+      border-radius: 14px;
+      background: rgba(46,204,113,.065);
+    }
+    .checkrow span { color: #dfffea; font-weight: 750; }
+    .checkrow input { width: auto; transform: scale(1.18); accent-color: var(--ok); }
+
+    .dropzone {
+      grid-column: 1 / -1;
+      position: relative;
+      min-height: 150px;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      text-align: center;
+      padding: 20px;
+      cursor: pointer;
+      border: 1.5px dashed rgba(255,255,255,.26);
+      border-radius: 20px;
+      background: linear-gradient(135deg, rgba(255,255,255,.05), rgba(255,176,0,.045));
+      transition: border-color .2s ease, background .2s ease, transform .2s ease;
+    }
+    .dropzone::before {
+      content: "📸";
+      display: block;
+      font-size: 2rem;
+      margin-bottom: 8px;
+      filter: drop-shadow(0 8px 16px rgba(0,0,0,.2));
+    }
+    .dropzone:hover { transform: translateY(-1px); border-color: rgba(255,176,0,.46); background: rgba(255,176,0,.065); }
+    .dropzone.drag { border-color: var(--accent-2); background: rgba(255,176,0,.12); }
+    .dropzone strong { display: block; margin-bottom: 6px; font-size: 1.05rem; }
+    .dropzone span { color: var(--muted); }
+    .preview { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: 12px; grid-column: 1 / -1; }
+    .preview-card {
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: rgba(8,13,21,.72);
+      box-shadow: 0 14px 30px rgba(0,0,0,.22);
+    }
+    .preview-card.cover {
+      border-color: rgba(255,176,0,.7);
+      box-shadow: 0 18px 38px rgba(255,176,0,.12), 0 14px 30px rgba(0,0,0,.24);
+    }
+    .preview-photo-wrap { position: relative; }
+    .preview-card img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; }
+    .preview-badge {
+      position: absolute;
+      left: 8px;
+      top: 8px;
+      padding: 5px 8px;
+      border-radius: 999px;
+      color: #171008;
+      background: linear-gradient(135deg, #ffd66b, var(--accent-2));
+      font-size: .72rem;
+      font-weight: 950;
+      box-shadow: 0 8px 18px rgba(0,0,0,.24);
+    }
+    .preview-actions { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; padding: 8px; }
+    .photo-btn {
+      min-height: 32px;
+      padding: 6px 8px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      cursor: pointer;
+      color: var(--text);
+      background: rgba(255,255,255,.055);
+      font-size: .78rem;
+      font-weight: 850;
+      transition: transform .16s ease, border-color .16s ease, background .16s ease, opacity .16s ease;
+    }
+    .photo-btn:hover { transform: translateY(-1px); border-color: rgba(255,176,0,.5); background: rgba(255,176,0,.09); }
+    .photo-btn.danger { color: #ffd5d5; border-color: rgba(255,77,77,.35); background: rgba(255,77,77,.1); }
+    .photo-btn:disabled { opacity: .42; cursor: not-allowed; transform: none; }
+    .preview-note {
+      grid-column: 1 / -1;
+      margin: 0;
+      padding: 13px;
+      color: var(--muted);
+      border: 1px dashed var(--line);
+      border-radius: 16px;
+      background: rgba(255,255,255,.035);
+    }
+    .form-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 10px; }
+
+    .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 16px; }
+    .toolbar input { flex: 1; min-width: 220px; }
+    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px; }
+    .sales-box {
+      margin: 0 0 16px;
+      padding: 14px;
+      border: 1px solid rgba(255,176,0,.18);
+      border-radius: 20px;
+      background: linear-gradient(135deg, rgba(255,176,0,.07), rgba(255,255,255,.025));
+    }
+    .sales-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; margin-bottom: 12px; }
+    .sales-head h3 { margin: 0; font-size: 1rem; letter-spacing: -.02em; }
+    .sales-head span { display: block; margin-top: 3px; color: var(--muted); font-size: .84rem; }
+    .sales-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+    .sales-actions .btn { min-height: 34px; }
+    .sales-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-bottom: 12px; }
+    .seller-card {
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: rgba(8,13,21,.55);
+    }
+    .seller-card strong, .seller-card span, .seller-card b { display: block; }
+    .seller-card strong { margin-bottom: 4px; }
+    .seller-card span { color: var(--muted); font-size: .82rem; }
+    .seller-card b { margin-top: 8px; color: #ffe4a0; }
+    .mini-sales-list { display: grid; gap: 8px; }
+    .sale-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 4px 10px;
+      padding: 10px 0;
+      border-top: 1px solid var(--line);
+    }
+    .sale-row span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sale-row small { grid-column: 1 / -1; color: var(--muted); }
+    .empty-state { margin: 0; color: var(--muted); }
+    .stat {
+      position: relative;
+      overflow: hidden;
+      min-height: 96px;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.025)), var(--panel-3);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
+    }
+    .stat::after {
+      position: absolute;
+      right: 12px;
+      bottom: 8px;
+      opacity: .18;
+      font-size: 2.2rem;
+    }
+    .stat:nth-child(1)::after { content: "🧾"; }
+    .stat:nth-child(2)::after { content: "✅"; }
+    .stat:nth-child(3)::after { content: "📷"; }
+    .stat:nth-child(4)::after { content: "🧾"; }
+    .stat:nth-child(5)::after { content: "💰"; }
+    .stat:nth-child(6)::after { content: "🏁"; }
+    .stat strong { display: block; font-size: 1.8rem; line-height: 1; margin-bottom: 8px; }
+    .stat span { color: var(--muted); font-size: .86rem; font-weight: 700; }
+
+    .table-wrap {
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      background: rgba(8,13,21,.56);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
+    }
+    table { width: 100%; border-collapse: collapse; min-width: 1040px; }
+    th, td { padding: 13px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; }
+    th {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      color: #c9d3e4;
+      font-size: .78rem;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      background: rgba(13,18,27,.96);
+    }
+    td { color: #e9edf7; }
+    tr { transition: background .16s ease; }
+    tr:hover td { background: rgba(255,255,255,.035); }
+    .thumbs { display: flex; align-items: center; gap: 8px; color: var(--muted); font-weight: 800; }
+    .thumbs img { width: 52px; height: 52px; object-fit: cover; border-radius: 14px; border: 1px solid var(--line); box-shadow: 0 10px 20px rgba(0,0,0,.22); }
+    .pill { display: inline-flex; align-items: center; border-radius: 999px; padding: 6px 10px; font-size: .82rem; font-weight: 850; background: rgba(46,204,113,.14); color: #c7ffdd; border: 1px solid rgba(46,204,113,.35); }
+    .pill.off { background: rgba(255,77,77,.13); color: #ffd5d5; border-color: rgba(255,77,77,.35); }
+    .row-actions { display: flex; gap: 8px; flex-wrap: nowrap; align-items: center; }
+    .row-actions .btn { white-space: nowrap; }
+    td:last-child, th:last-child { min-width: 280px; }
+    .mini { min-height: 36px; padding: 8px 10px; border-radius: 11px; font-size: .86rem; }
+    .status { margin: 12px 0 0; color: var(--muted); min-height: 24px; line-height: 1.45; }
+    .status.ok { color: #c7ffdd; }
+    .status.err { color: #ffd5d5; }
+
+    .hidden { display: none !important; }
+
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes breathe {
+      0%, 100% { transform: scale(.96); opacity: .78; }
+      50% { transform: scale(1.04); opacity: 1; }
+    }
+
+    @media (max-width: 1040px) {
+      .grid { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 920px) {
+      .topbar-inner { align-items: flex-start; flex-direction: column; padding: 14px 0; }
+      .actions { justify-content: flex-start; }
+      .stats { grid-template-columns: 1fr; }
+    }
+
+    /* ===== ADMIN DESKTOP FIX ===== */
+@media (min-width: 900px) {
+  .wrap {
+    width: min(100% - 72px, 1480px);
+    max-width: 1480px;
+    margin: 0 auto;
+  }
+
+  .panel {
+    width: 100%;
+    max-width: none;
+  }
+
+  .toolbar {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .toolbar input {
+    flex: 1 1 420px;
+  }
+
+  table {
+    width: 100%;
+  }
+
+  th,
+  td {
+    white-space: nowrap;
+  }
+
+  td:nth-child(3) {
+    white-space: normal;
+    min-width: 260px;
+  }
+}
+    @media (max-width: 560px) {
+      .login { padding: 18px; }
+      .login-card { padding: 22px; border-radius: 24px; }
+      .login-hero { align-items: flex-start; flex-direction: column; }
+      .form-grid { grid-template-columns: 1fr; }
+      .wrap { width: min(100% - 20px, 1240px); }
+      .panel { padding: 16px; border-radius: 20px; }
+      .brand-logo { width: 42px; height: 42px; border-radius: 14px; }
+      .actions, .form-actions { width: 100%; }
+      .session-chip { flex: 1 1 100%; max-width: none; }
+      .actions .btn, .form-actions .btn { flex: 1 1 auto; }
+      .toolbar input { min-width: 100%; }
+      .toolbar .btn { flex: 1 1 auto; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+    }
+  </style>
+</head>
+<body>
+  <section id="loginView" class="login">
+    <div class="login-card">
+      <div class="login-hero">
+        <img class="login-logo" src="imagenes/logo-vences.jpeg" alt="Logo AUTOPARTES VENCES">
+        <span class="login-badge">Panel privado</span>
+      </div>
+      <h1>Admin VENCES</h1>
+      <p>Publica piezas, sube fotos y actualiza disponibilidad desde una cabina más limpia, rápida y profesional.</p>
+      <form id="loginForm" class="form-grid">
+        <div class="field full">
+          <label for="loginEmail">Correo</label>
+          <input id="loginEmail" type="email" autocomplete="email" required>
+        </div>
+        <div class="field full">
+          <label for="loginPassword">Contraseña</label>
+          <input id="loginPassword" type="password" autocomplete="current-password" required>
+        </div>
+        <div class="form-actions">
+          <button class="btn primary" type="submit">Entrar</button>
+          <a class="btn" href="index.html">Ver catálogo</a>
+        </div>
+      </form>
+      <p id="loginStatus" class="status"></p>
+    </div>
+  </section>
+
+  <main id="adminView" class="hidden">
+    <header class="topbar">
+      <div class="wrap topbar-inner">
+        <div class="brand">
+          <img class="brand-logo" src="imagenes/logo-vences.jpeg" alt="Logo AUTOPARTES VENCES">
+          <div class="brand-copy">
+            <strong>AUTOPARTES VENCES</strong>
+            <span>Motor de publicaciones e inventario</span>
+          </div>
+        </div>
+        <div class="actions">
+          <div class="session-chip" title="Usuario conectado">
+            <span id="sessionName">Sesión privada</span>
+            <small id="sessionRole">Verificando usuario</small>
+          </div>
+          <a class="btn" href="index.html" target="_blank" rel="noopener">Abrir catálogo</a>
+          <button id="exportExcel" class="btn gold admin-only" type="button">Exportar Excel</button>
+          <button id="logoutBtn" class="btn danger" type="button">Salir</button>
+        </div>
+      </div>
+    </header>
+
+    <div class="wrap grid">
+      <section class="panel admin-only">
+        <h2 id="formTitle">Nueva pieza</h2>
+        <p class="hint">Llena los datos, agrega fotos y acomódalas. La primera foto será la portada del catálogo.</p>
+
+        <form id="piezaForm" class="form-grid">
+          <input type="hidden" id="piezaId">
+
+          <div class="section-title"><span>01</span> Datos principales</div>
+
+          <div class="field">
+            <label for="folio">ID / Folio</label>
+            <input id="folio" placeholder="Ej. 041">
+          </div>
+
+          <div class="field">
+            <label for="precio">Precio</label>
+            <input id="precio" type="number" min="0" step="1" placeholder="1300">
+          </div>
+
+          <div class="field full">
+            <label for="pieza">Pieza *</label>
+            <input id="pieza" required placeholder="Puerta delantera">
+          </div>
+
+          <div class="section-title"><span>02</span> Vehículo compatible</div>
+
+          <div class="field">
+            <label for="marca">Marca</label>
+            <input id="marca" placeholder="Chevrolet">
+          </div>
+
+          <div class="field">
+            <label for="modelo">Modelo</label>
+            <input id="modelo" placeholder="Beat">
+          </div>
+
+          <div class="field">
+            <label for="anio">Año</label>
+            <input id="anio" placeholder="2014-2021">
+          </div>
+
+          <div class="field">
+            <label for="lado">Lado</label>
+            <select id="lado">
+              <option value="">N/C</option>
+              <option>Izquierdo</option>
+              <option>Derecho</option>
+              <option>Delantero</option>
+              <option>Trasero</option>
+              <option>Superior</option>
+              <option>Inferior</option>
+            </select>
+          </div>
+
+          <div class="section-title"><span>03</span> Detalles de la pieza</div>
+
+          <div class="field">
+            <label for="color">Color</label>
+            <input id="color" placeholder="Blanco">
+          </div>
+
+          <div class="field">
+            <label for="estado">Estado</label>
+            <input id="estado" placeholder="Usado original">
+          </div>
+
+          <div class="field full">
+            <label for="numeroParte">Número de parte</label>
+            <input id="numeroParte" placeholder="Si tiene etiqueta o código">
+          </div>
+
+          <div class="field full">
+            <label for="descripcion">Observaciones</label>
+            <textarea id="descripcion" placeholder="Detalles, daños, incluye conectores, compatibilidad pendiente, etc."></textarea>
+          </div>
+
+          <label class="field full checkrow">
+            <span>Publicar como disponible</span>
+            <input id="disponible" type="checkbox" checked>
+          </label>
+
+          <div class="section-title"><span>04</span> Fotos y publicación</div>
+
+          <div id="dropzone" class="dropzone">
+            <div>
+              <strong>Arrastra fotos aquí</strong>
+              <span>O da clic para seleccionar varias. Se agregan sin borrar las fotos actuales.</span>
+            </div>
+            <input id="fotosInput" type="file" accept="image/*" multiple hidden>
+          </div>
+
+          <div id="preview" class="preview"></div>
+
+          <div class="form-actions">
+            <button class="btn primary" id="saveBtn" type="submit">Guardar publicación</button>
+            <button class="btn" id="resetBtn" type="button">Limpiar</button>
+          </div>
+        </form>
+        <p id="formStatus" class="status"></p>
+      </section>
+
+      <section class="panel">
+        <h2>Inventario</h2>
+        <p class="hint">Busca piezas, revisa disponibilidad y registra ventas con vista de control.</p>
+
+        <div class="stats admin-only">
+          <div class="stat"><strong id="statTotal">0</strong><span>Total de piezas</span></div>
+          <div class="stat"><strong id="statDisponibles">0</strong><span>Disponibles</span></div>
+          <div class="stat"><strong id="statFotos">0</strong><span>Con fotos</span></div>
+          <div class="stat"><strong id="statVendidasMes">0</strong><span>Vendidas este mes</span></div>
+          <div class="stat"><strong id="statMontoMes">$0</strong><span>Total vendido este mes</span></div>
+          <div class="stat"><strong id="statMejorVendedor">Sin ventas</strong><span>Mejor vendedor del mes</span></div>
+        </div>
+
+        <div class="sales-box admin-only">
+          <div class="sales-head">
+            <div>
+              <h3>Ventas del mes</h3>
+              <span>Por usuario, monto y piezas</span>
+            </div>
+            <div class="sales-actions admin-only">
+              <button id="exportMonthlyCut" class="btn mini" type="button">Corte mensual</button>
+              <button id="clearTrainingSales" class="btn mini danger" type="button">Limpiar pruebas</button>
+            </div>
+          </div>
+          <div id="ventasResumen">
+            <p class="empty-state">Cargando resumen de ventas...</p>
+          </div>
+        </div>
+
+        <div class="toolbar">
+          <input id="searchAdmin" placeholder="Buscar por ID, pieza, marca, modelo, año...">
+          <label class="btn admin-only" for="excelInput">Importar Excel</label>
+          <input id="excelInput" type="file" accept=".xlsx,.xls,.csv" hidden>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Fotos</th>
+                <th>ID</th>
+                <th>Pieza</th>
+                <th>Auto</th>
+                <th>Precio</th>
+                <th>Estado</th>
+                <th>Venta</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="tablaPiezas"></tbody>
+          </table>
+        </div>
+        <p id="tableStatus" class="status"></p>
+      </section>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="supabase-config.js"></script>
+  <script src="admin.js?v=corte-ventas-2"></script>
+  <script>
+  function aplicarVistaPorRol() {
+    const roleEl = document.getElementById("sessionRole");
+    const rol = (roleEl?.textContent || "").trim().toLowerCase();
+
+    const esAdmin = rol.includes("admin");
+
+    document.querySelectorAll(".admin-only").forEach((el) => {
+      el.style.display = esAdmin ? "" : "none";
+    });
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    aplicarVistaPorRol();
+
+    const roleEl = document.getElementById("sessionRole");
+    if (roleEl) {
+      const observer = new MutationObserver(aplicarVistaPorRol);
+      observer.observe(roleEl, {
+        childList: true,
+        characterData: true,
+        subtree: true
+      });
+    }
+
+    setTimeout(aplicarVistaPorRol, 500);
+    setTimeout(aplicarVistaPorRol, 1500);
+  });
+</script>
+</body>
+</html>
