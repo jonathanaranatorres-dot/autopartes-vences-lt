@@ -1406,42 +1406,34 @@ async function limpiarVentasCapacitacion() {
   setStatus("tableStatus", "Limpiando ventas de capacitación...");
 
   try {
-    if (piezaIds.length) {
-      const payload = auditarPayload({
-        disponible: true,
-        estado: "Disponible",
-        vendido_por: null,
-        vendido_en: null,
-        precio_venta: null,
-        metodo_pago: null,
-        nota_venta: null
-      });
+    // Camino fuerte: ejecuta una función segura en Supabase.
+    // Esta función evita que las políticas RLS bloqueen la limpieza del admin.
+    const { data, error } = await avDB.rpc("limpiar_ventas_capacitacion_mes");
 
-      const payloadSeguro = extrasDisponibles.auditoriaPiezas
-        ? payload
-        : { disponible: true, estado: "Disponible" };
-
-      const { error } = await avDB.from("piezas").update(payloadSeguro).in("id", piezaIds);
-      if (error) throw error;
-    }
-
-    if (extrasDisponibles.ventas && ventaIds.length) {
-      const { error } = await avDB.from("ventas").delete().in("id", ventaIds);
-      if (error) throw error;
-    }
+    if (error) throw error;
 
     await registrarMovimiento("limpiar_ventas_capacitacion", null, {
-      ventas_limpiadas: ventasLimpieza,
-      piezas_republicadas: piezasRepublicadas,
+      ventas_limpiadas: data?.ventas_limpiadas ?? ventasLimpieza,
+      piezas_republicadas: data?.piezas_republicadas ?? piezasRepublicadas,
       total_limpiado: totalMes,
-      mes: claveMesCorte()
+      mes: data?.mes || claveMesCorte()
     });
 
     await cargarPiezas();
-    setStatus("tableStatus", `Ventas de capacitación limpiadas: ${ventasLimpieza} venta(s) y ${piezasRepublicadas} pieza(s) republicadas.`, "ok");
+
+    const ventasOk = Number(data?.ventas_limpiadas ?? ventasLimpieza);
+    const piezasOk = Number(data?.piezas_republicadas ?? piezasRepublicadas);
+    setStatus("tableStatus", `Ventas de capacitación limpiadas: ${ventasOk} venta(s) y ${piezasOk} pieza(s) republicadas.`, "ok");
   } catch (error) {
     console.error("Error limpiando ventas de capacitación:", error);
-    setStatus("tableStatus", "Error limpiando ventas: " + error.message, "err");
+
+    const mensaje = String(error?.message || "");
+    if (mensaje.includes("Could not find the function") || mensaje.includes("limpiar_ventas_capacitacion_mes") || mensaje.includes("PGRST202")) {
+      setStatus("tableStatus", "Falta ejecutar el SQL de limpieza en Supabase. Revisa el archivo supabase-limpiar-ventas.sql del ZIP.", "err");
+      return;
+    }
+
+    setStatus("tableStatus", "Error limpiando ventas: " + mensaje, "err");
   }
 }
 
