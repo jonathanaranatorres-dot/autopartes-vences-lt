@@ -10,6 +10,19 @@
   const PHOTO_BATCH_SIZE = 60;
   const SEARCH_DEBOUNCE_MS = 220;
   const API_TIMEOUT_MS = 14000;
+  const PRODUCT_PAGE = "producto.html";
+  const BUSQUEDAS_RAPIDAS = [
+    ["faro", "Faros"],
+    ["calavera", "Calaveras"],
+    ["puerta", "Puertas"],
+    ["defensa", "Defensas"],
+    ["espejo", "Espejos"],
+    ["cofre", "Cofres"],
+    ["mazda", "Mazda"],
+    ["nissan", "Nissan"],
+    ["chevrolet", "Chevrolet"],
+    ["honda", "Honda"]
+  ];
 
   let productos = [];
   let filtrados = [];
@@ -49,9 +62,13 @@
         const aplicarFiltro = () => {
           actualizarOpcionesFiltros(elementId);
           filtrar();
+          actualizarSugerenciasBusqueda();
+          actualizarLinkPiezaNoEncontrada();
         };
 
         if (elementId === "searchInput") {
+          actualizarSugerenciasBusqueda();
+          actualizarLinkPiezaNoEncontrada();
           window.clearTimeout(filtroTimer);
           filtroTimer = window.setTimeout(aplicarFiltro, SEARCH_DEBOUNCE_MS);
           return;
@@ -65,6 +82,20 @@
     id("clearFiltersBtn")?.addEventListener("click", limpiarFiltros);
     id("navCartBtn")?.addEventListener("click", abrirCarrito);
     id("heroCartBtn")?.addEventListener("click", abrirCarrito);
+
+    $$("[data-search-chip]").forEach((btn) => {
+      btn.addEventListener("click", () => buscarConTexto(btn.dataset.searchChip || btn.textContent || ""));
+    });
+
+    id("searchInput")?.addEventListener("focus", actualizarSugerenciasBusqueda);
+
+    document.addEventListener("click", (event) => {
+      const sugerencias = id("smartSuggestions");
+      const buscador = id("searchInput");
+      if (!sugerencias || sugerencias.hidden) return;
+      if (sugerencias.contains(event.target) || event.target === buscador) return;
+      sugerencias.hidden = true;
+    });
 
     id("detailBackdrop")?.addEventListener("click", cerrarDetalle);
     id("detailClose")?.addEventListener("click", cerrarDetalle);
@@ -412,6 +443,124 @@
     );
   }
 
+  function buscarConTexto(texto) {
+    const input = id("searchInput");
+    if (!input) return;
+    input.value = limpiar(texto);
+    actualizarOpcionesFiltros("searchInput");
+    filtrar();
+    actualizarSugerenciasBusqueda();
+    actualizarLinkPiezaNoEncontrada();
+    input.focus();
+  }
+
+  function actualizarSugerenciasBusqueda() {
+    const cont = id("smartSuggestions");
+    const input = id("searchInput");
+    if (!cont || !input) return;
+
+    const texto = limpiar(input.value);
+    if (texto.length < 2 || !productos.length) {
+      cont.hidden = true;
+      cont.innerHTML = "";
+      return;
+    }
+
+    const sugerencias = crearSugerenciasBusqueda(texto);
+    if (!sugerencias.length) {
+      cont.hidden = true;
+      cont.innerHTML = "";
+      return;
+    }
+
+    cont.innerHTML = `
+      <span>Sugerencias rápidas:</span>
+      ${sugerencias.map((s) => `<button type="button" data-suggestion="${escaparAttr(s)}">${escapar(s)}</button>`).join("")}
+    `;
+    cont.hidden = false;
+
+    cont.querySelectorAll("[data-suggestion]").forEach((btn) => {
+      btn.addEventListener("click", (event) => {
+        event.stopPropagation();
+        buscarConTexto(btn.dataset.suggestion || "");
+        cont.hidden = true;
+      });
+    });
+  }
+
+  function crearSugerenciasBusqueda(texto) {
+    const tokens = tokenizarBusqueda(texto);
+    const candidatos = productos
+      .filter((p) => coincideTokensFlexibles(p, tokens))
+      .slice(0, 18);
+
+    const sugerencias = [];
+    const agregar = (valor) => {
+      const limpio = limpiar(valor);
+      if (!limpio) return;
+      const llave = normalizar(limpio);
+      if (!llave || sugerencias.some((s) => normalizar(s) === llave)) return;
+      sugerencias.push(limpio);
+    };
+
+    candidatos.forEach((p) => {
+      agregar([p.pieza, p.marca, p.modelo].filter(Boolean).join(" "));
+      agregar([p.pieza, p.marca, p.modelo, p.anio].filter(Boolean).join(" "));
+    });
+
+    if (sugerencias.length < 6) {
+      BUSQUEDAS_RAPIDAS.forEach(([valor]) => {
+        if (normalizar(valor).includes(normalizar(texto)) || normalizar(texto).includes(normalizar(valor).slice(0, 3))) agregar(valor);
+      });
+    }
+
+    return sugerencias.slice(0, 6);
+  }
+
+  function coincideTokensFlexibles(producto, tokens) {
+    if (!tokens.length) return true;
+    const texto = ` ${textoProducto(producto)} `;
+    const tokensProducto = tokensProductoBusqueda(producto);
+    return tokens.every((token) => {
+      const grupo = expandirTokenBusqueda(token);
+      return grupo.some((opcion) => texto.includes(` ${opcion} `) || tokensProducto.some((tp) => tp.startsWith(opcion)));
+    });
+  }
+
+  function describirCoincidencia(producto) {
+    const busqueda = getFiltros().busqueda;
+    const grupos = gruposBusqueda(busqueda);
+    if (!busqueda || !grupos.length) return "";
+
+    const texto = ` ${textoProducto(producto)} `;
+    const tokensProducto = tokensProductoBusqueda(producto);
+    const etiquetas = [];
+
+    grupos.forEach((grupo) => {
+      const tokenOriginal = grupo[0];
+      const encontrado = grupo.some((token) => coincideTokenBusqueda(token, texto, tokensProducto));
+      if (encontrado) etiquetas.push(capitalizar(tokenOriginal));
+    });
+
+    return etiquetas.length ? `Coincide con: ${etiquetas.slice(0, 4).join(" + ")}` : "";
+  }
+
+  function capitalizar(texto) {
+    const limpio = limpiar(texto);
+    return limpio ? limpio.charAt(0).toUpperCase() + limpio.slice(1) : "";
+  }
+
+  function actualizarLinkPiezaNoEncontrada() {
+    const link = id("missingPieceBtn");
+    if (!link) return;
+    link.href = crearWhatsAppBusqueda(textoSolicitudActual());
+  }
+
+  function textoSolicitudActual() {
+    const f = getFiltros();
+    return limpiar([f.busqueda, f.pieza, f.marca, f.modelo, f.anio, f.lado ? mostrarLadoHumano(f.lado) : ""].filter(Boolean).join(" "));
+  }
+
   function getFiltros() {
     return {
       busqueda: id("searchInput")?.value || "",
@@ -425,6 +574,7 @@
 
   function filtrar() {
     const f = getFiltros();
+    actualizarLinkPiezaNoEncontrada();
 
     filtrados = productos.filter((p) => {
       const coincideBusqueda = coincideBusquedaInteligente(p, f.busqueda);
@@ -486,6 +636,7 @@
     const actual = getFiltros();
 
     const basePara = (campo) => productos.filter((p) => {
+      if (actual.busqueda && !coincideBusquedaInteligente(p, actual.busqueda)) return false;
       if (campo !== "pieza" && actual.pieza && p.pieza !== actual.pieza) return false;
       if (campo !== "marca" && actual.marca && p.marca !== actual.marca) return false;
       if (campo !== "modelo" && actual.modelo && p.modelo !== actual.modelo) return false;
@@ -514,7 +665,7 @@
     const select = id(selectId);
     if (!select) return;
     const valorActual = select.value;
-    select.innerHTML = `<option value="">${escapar(etiqueta)}</option>` + valores.map((valor) => `<option value="${escaparAttr(valor)}">${escapar(valor)}</option>`).join("");
+    select.innerHTML = `<option value="">${escapar(etiqueta)}</option>` + valores.map((valor) => `<option value="${escaparAttr(valor)}">${escapar(selectId === "ladoSelect" ? mostrarLadoHumano(valor) : valor)}</option>`).join("");
     if (valores.includes(valorActual)) select.value = valorActual;
   }
 
@@ -554,13 +705,9 @@
     grid.classList.toggle("two-items", visibles.length === 2);
 
     if (!total) {
-      grid.innerHTML = `
-        <div class="empty">
-          <h3>No encontramos piezas con esa búsqueda</h3>
-          <p>Prueba con menos palabras, otro nombre de la pieza o escríbenos por WhatsApp para revisar disponibilidad.</p>
-        </div>`;
+      mostrarSinResultados(grid);
       actualizarBotonCargarMas(0, 0);
-      setStatus("No hay resultados con esos filtros.", "");
+      setStatus("No hay resultados con esos filtros, pero todavía podemos revisarlo por WhatsApp.", "");
       return;
     }
 
@@ -578,13 +725,20 @@
       const price = node.querySelector(".price");
       const viewBtn = node.querySelector(".view-btn");
       const cartBtn = node.querySelector(".cart-btn");
+      const matchReason = node.querySelector(".match-reason");
 
       node.querySelector(".id-tag").textContent = `ID: ${producto.id || "N/A"}`;
       node.querySelector(".status-tag").textContent = producto.estado || "Disponible";
       title.textContent = tituloProducto(producto);
       meta.textContent = [producto.marca, producto.modelo, producto.anio].filter(Boolean).join(" · ") || "Autoparte disponible";
-      details.innerHTML = detalleHTML("Lado", producto.lado) + detalleHTML("Color", producto.color) + detalleHTML("No. parte", producto.numeroParte) + detalleHTML("Estado", producto.estado);
+      details.innerHTML = detalleHTML("Lado", mostrarLadoHumano(producto.lado)) + detalleHTML("Color", producto.color) + detalleHTML("No. parte", producto.numeroParte) + detalleHTML("Estado", producto.estado);
       price.textContent = formatearPrecio(producto.precio);
+      if (cartBtn) cartBtn.textContent = "Preguntar";
+      if (matchReason) {
+        const motivo = describirCoincidencia(producto);
+        matchReason.textContent = motivo;
+        matchReason.hidden = !motivo;
+      }
       card.style.setProperty("--card-index", String(index));
 
       const abrir = () => abrirDetalle(producto);
@@ -628,6 +782,46 @@
         mostrarProductos(filtrados);
       }
     }).catch((error) => console.warn("No se pudieron cargar fotos visibles:", error));
+  }
+
+  function mostrarSinResultados(grid) {
+    const solicitud = textoSolicitudActual();
+    const whatsapp = crearWhatsAppBusqueda(solicitud);
+    const intentos = sugerirBusquedasAlternas(solicitud);
+
+    grid.classList.remove("one-item", "two-items");
+    grid.innerHTML = `
+      <div class="empty smart-empty">
+        <span class="empty-icon">🔎</span>
+        <h3>No encontramos “${escapar(solicitud || "esa búsqueda")}”</h3>
+        <p>Puede estar escrita diferente, pendiente de foto o todavía no publicada. Te ayudamos a revisarla directo por WhatsApp.</p>
+        <div class="empty-actions">
+          <a class="btn primary" href="${escaparAttr(whatsapp)}" target="_blank" rel="noopener">Preguntar por esta pieza</a>
+          <button class="btn ghost" type="button" data-empty-clear>Limpiar búsqueda</button>
+        </div>
+        ${intentos.length ? `<div class="empty-suggestions"><strong>También prueba:</strong>${intentos.map((s) => `<button type="button" data-empty-search="${escaparAttr(s)}">${escapar(s)}</button>`).join("")}</div>` : ""}
+      </div>`;
+
+    grid.querySelector("[data-empty-clear]")?.addEventListener("click", limpiarFiltros);
+    grid.querySelectorAll("[data-empty-search]").forEach((btn) => {
+      btn.addEventListener("click", () => buscarConTexto(btn.dataset.emptySearch || ""));
+    });
+  }
+
+  function sugerirBusquedasAlternas(texto) {
+    const tokens = tokenizarBusqueda(texto);
+    const sugerencias = [];
+    const agregar = (valor) => {
+      const limpio = limpiar(valor);
+      if (limpio && !sugerencias.some((s) => normalizar(s) === normalizar(limpio))) sugerencias.push(limpio);
+    };
+
+    if (tokens.length > 1) agregar(tokens.filter((t) => !/^\d{4}$/.test(t)).join(" "));
+    tokens.forEach((token) => {
+      if (token.length >= 3) agregar(token);
+    });
+    BUSQUEDAS_RAPIDAS.slice(0, 5).forEach(([valor]) => agregar(valor));
+    return sugerencias.filter((s) => normalizar(s) !== normalizar(texto)).slice(0, 5);
   }
 
   async function cargarFotosParaProductos(lista) {
@@ -782,8 +976,29 @@
     return boton;
   }
 
+  function mostrarLadoHumano(lado) {
+    const original = limpiar(lado);
+    const t = prepararTextoParaTokens(original);
+    if (!original) return "N/A";
+
+    const tieneDelantero = /\bdelanter|\bfront/.test(t) || /^d[-\s/]/i.test(original);
+    const tieneTrasero = /\btraser|\bposterior|\bback/.test(t) || /^t[-\s/]/i.test(original);
+    const tieneDerecho = /\bdd\b|\bderech|\brh\b/.test(t) || /d[-\s]?d/i.test(original);
+    const tieneIzquierdo = /\bdi\b|\bizquierd|\blh\b/.test(t) || /d[-\s]?i|i[-\s]?d/i.test(original);
+
+    const partes = [];
+    if (tieneDelantero) partes.push("Delantero");
+    if (tieneTrasero) partes.push("Trasero");
+    if (tieneDerecho) partes.push("derecho");
+    if (tieneIzquierdo) partes.push("izquierdo");
+
+    if (partes.length) return capitalizar(partes.join(" "));
+    return original;
+  }
+
   function tituloProducto(p) {
-    return [p.pieza, p.lado, p.marca, p.modelo, p.anio].filter(Boolean).join(" ") || "Autoparte disponible";
+    const lado = p.lado ? mostrarLadoHumano(p.lado) : "";
+    return [p.pieza, lado !== "N/A" ? lado : "", p.marca, p.modelo, p.anio].filter(Boolean).join(" ") || "Autoparte disponible";
   }
 
   function detalleHTML(label, value) {
@@ -811,7 +1026,7 @@
     id("detailPrice").textContent = formatearPrecio(producto.precio);
     id("detailDescription").textContent = producto.descripcion || "Sin descripción adicional. Te recomendamos confirmar compatibilidad por WhatsApp antes de cerrar la compra.";
     id("detailWhatsapp").href = crearWhatsAppProducto(producto);
-    id("detailList").innerHTML = detalleHTML("Pieza", producto.pieza) + detalleHTML("Marca", producto.marca) + detalleHTML("Modelo", producto.modelo) + detalleHTML("Año", producto.anio) + detalleHTML("Lado", producto.lado) + detalleHTML("Color", producto.color) + detalleHTML("No. parte", producto.numeroParte) + detalleHTML("Estado", producto.estado);
+    id("detailList").innerHTML = detalleHTML("Pieza", producto.pieza) + detalleHTML("Marca", producto.marca) + detalleHTML("Modelo", producto.modelo) + detalleHTML("Año", producto.anio) + detalleHTML("Lado", mostrarLadoHumano(producto.lado)) + detalleHTML("Color", producto.color) + detalleHTML("No. parte", producto.numeroParte) + detalleHTML("Estado", producto.estado);
 
     pintarFotoDetalle();
     pintarThumbsDetalle();
@@ -885,6 +1100,12 @@
     productoDetalle = null;
   }
 
+  function crearUrlProducto(p) {
+    const url = new URL(PRODUCT_PAGE, window.location.href);
+    url.searchParams.set("id", p.id || p.uuid || "");
+    return url.toString();
+  }
+
   function crearWhatsAppProducto(p) {
     const mensaje = [
       "Hola, quiero revisar esta autoparte:",
@@ -893,10 +1114,22 @@
       `Pieza: ${tituloProducto(p)}`,
       `Número de parte: ${p.numeroParte || "N/A"}`,
       `Precio: ${formatearPrecio(p.precio)}`,
+      `Link: ${crearUrlProducto(p)}`,
       "",
       "Entiendo que están ubicados en Ecatepec, Estado de México.",
       "¿Me puedes confirmar disponibilidad, compatibilidad y forma de pago?"
     ].join("\n");
+    return `https://wa.me/${WHATSAPP}?text=${encodeURIComponent(mensaje)}`;
+  }
+
+  function crearWhatsAppBusqueda(busqueda) {
+    const texto = limpiar(busqueda);
+    const mensaje = [
+      "Hola, busco una autoparte que no encontré en el catálogo.",
+      texto ? `Búsqueda: ${texto}` : "",
+      "",
+      "¿Me puedes ayudar a revisar si la tienen disponible?"
+    ].filter((linea) => linea !== "").join("\n");
     return `https://wa.me/${WHATSAPP}?text=${encodeURIComponent(mensaje)}`;
   }
 
@@ -965,6 +1198,7 @@
       lineas.push(`ID: ${p.id || "N/A"}`);
       lineas.push(`Precio: ${formatearPrecio(p.precio)}`);
       lineas.push(`No. parte: ${p.numeroParte || "N/A"}`);
+      lineas.push(`Link: ${crearUrlProducto(p)}`);
       lineas.push("");
     });
     lineas.push("Entiendo que están ubicados en Ecatepec, Estado de México.");
@@ -1021,7 +1255,7 @@
             "@type": "Offer",
             priceCurrency: "MXN",
             availability: "https://schema.org/InStock",
-            url: "https://www.autopartesvences.com/",
+            url: crearUrlProducto(p),
             price: Number(p.precio || 0) || undefined
           }
         }
