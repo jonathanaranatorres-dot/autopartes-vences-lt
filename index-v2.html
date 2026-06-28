@@ -44,7 +44,7 @@
   }
   </script>
 
-  <link rel="stylesheet" href="style-v2.css?v=4" />
+  <link rel="stylesheet" href="style-v2.css?v=8" />
 </head>
 <body>
   <header class="top-strip" id="inicio">
@@ -132,7 +132,7 @@
         <div class="filters" aria-label="Filtros del catálogo">
           <label class="search-field">
             Buscar
-            <input id="searchInput" type="search" placeholder="Marca, modelo, año, pieza, lado, número de parte..." autocomplete="off" />
+            <input id="searchInput" type="search" placeholder="Ej. faro de mazda, puerta beat, calavera sentra..." autocomplete="off" />
           </label>
           <label>
             Pieza
@@ -156,6 +156,24 @@
           </label>
           <button class="filter-clear" id="clearFiltersBtn" type="button">Limpiar</button>
           <button class="filter-refresh" id="refreshBtn" type="button">Actualizar</button>
+        </div>
+
+        <div class="quick-chips" aria-label="Búsquedas rápidas">
+          <button type="button" data-search-chip="faro">Faros</button>
+          <button type="button" data-search-chip="calavera">Calaveras</button>
+          <button type="button" data-search-chip="puerta">Puertas</button>
+          <button type="button" data-search-chip="defensa">Defensas</button>
+          <button type="button" data-search-chip="espejo">Espejos</button>
+          <button type="button" data-search-chip="mazda">Mazda</button>
+          <button type="button" data-search-chip="nissan">Nissan</button>
+          <button type="button" data-search-chip="chevrolet">Chevrolet</button>
+        </div>
+
+        <div class="smart-suggestions" id="smartSuggestions" hidden></div>
+
+        <div class="catalog-helper improved-helper">
+          <span>Tip: escribe como cliente: “faro de mazda”, “puerta beat” o “calavera sentra”. También acepta “maz”, “niss” o “tuc”.</span>
+          <a id="missingPieceBtn" href="https://wa.me/525632753982?text=Hola,%20busco%20una%20autoparte%20que%20no%20aparece%20en%20el%20cat%C3%A1logo" target="_blank" rel="noopener">¿No encontraste tu pieza?</a>
         </div>
 
         <div class="catalog-toolbar">
@@ -266,12 +284,13 @@
         <div class="product-topline"><span class="tag id-tag"></span><span class="tag status-tag"></span></div>
         <h3></h3>
         <p class="meta"></p>
+        <p class="match-reason" hidden></p>
         <dl class="details"></dl>
         <div class="price-row">
           <strong class="price"></strong>
           <div class="card-actions">
             <button class="btn small view-btn" type="button">Ver detalles</button>
-            <button class="btn small cart-btn" type="button">Agregar</button>
+            <button class="btn small cart-btn" type="button">Preguntar</button>
           </div>
         </div>
       </div>
@@ -279,6 +298,6 @@
   </template>
 
   <script src="supabase-config.js?v=4" defer></script>
-  <script src="app-v2.js?v=15" defer></script>
+  <script src="app-v2.js?v=16" defer></script>
 </body>
 </html>
