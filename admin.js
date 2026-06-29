@@ -10,6 +10,7 @@ let fotosTrabajo = [];
 let fotosEliminadas = [];
 let contadorFotoTemporal = 0;
 let filtroTabla = "";
+let filtroFamilia = "";
 let usuarioActual = null;
 let perfilActual = null;
 let perfilesPorId = new Map();
@@ -36,6 +37,38 @@ function normalizar(texto) {
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .trim();
+}
+
+const familiasAdmin = {
+  faro: ["faro", "faros", "foco", "lampara", "lampara delantera", "optico", "optica"],
+  calavera: ["calavera", "calaveras", "stop", "mica trasera", "faro trasero", "luz trasera", "luz posterior", "piloto trasero"],
+  puerta: ["puerta", "puertas"],
+  defensa: ["defensa", "defensas", "fascia", "facia", "parachoques", "bumper", "alma defensa", "absorbedor defensa", "refuerzo defensa"],
+  cofre: ["cofre", "capo", "capot", "hood"],
+  salpicadera: ["salpicadera", "salpicaderas", "guardafango", "guardafangos", "lodo", "lodera", "loderas"],
+  espejo: ["espejo", "espejos", "retrovisor", "retrovisores"],
+  parrilla: ["parrilla", "rejilla", "grille", "moldura parrilla"],
+  cajuela: ["cajuela", "tapa cajuela", "tapa trasera", "compuerta", "quinta puerta", "5ta puerta", "maletero"],
+  cristal: ["cristal", "vidrio", "parabrisas", "medallon", "quemacocos", "aleta", "ventana"],
+  llanta: ["llanta", "llantas", "rin", "rines", "neumatico", "neumaticos", "tapón", "tapon", "centro rin"],
+  motor: ["motor", "transmision", "caja", "alternador", "marcha", "radiador", "condensador", "ventilador", "compresor", "bomba", "manguera", "multiple", "inyeccion", "inyector", "sensor", "soporte motor"],
+  interior: ["asiento", "asientos", "tablero", "bolsa de aire", "airbag", "volante", "consola", "guantera", "vestidura", "alfombra", "cinturon", "cinturon", "palanca", "moldura interior", "tapa interior"],
+  electrico: ["modulo", "computadora", "ecu", "bcm", "arnes", "cableado", "switch", "boton", "control", "pantalla", "estereo", "cluster", "tablero instrumentos", "sensor", "chicote", "elevador", "motor elevador"]
+};
+
+function textoFamiliaPieza(p) {
+  return normalizar([
+    p.pieza,
+    p.descripcion,
+    p.numero_parte
+  ].filter(Boolean).join(" "));
+}
+
+function coincideFamilia(p, familia) {
+  if (!familia) return true;
+  const palabras = familiasAdmin[familia] || [];
+  const texto = textoFamiliaPieza(p);
+  return palabras.some((palabra) => texto.includes(normalizar(palabra)));
 }
 
 function slug(texto) {
@@ -509,22 +542,25 @@ function textoVentaPieza(p) {
 
 function piezasFiltradas() {
   const q = normalizar(filtroTabla);
-  if (!q) return piezas;
 
-  return piezas.filter((p) => normalizar([
-    p.folio,
-    p.pieza,
-    p.marca,
-    p.modelo,
-    p.anio,
-    p.color,
-    p.lado,
-    p.estado,
-    p.numero_parte,
-    p.descripcion,
-    p.metodo_pago,
-    nombrePerfil(p.vendido_por)
-  ].join(" ")).includes(q));
+  return piezas.filter((p) => {
+    const coincideBusqueda = !q || normalizar([
+      p.folio,
+      p.pieza,
+      p.marca,
+      p.modelo,
+      p.anio,
+      p.color,
+      p.lado,
+      p.estado,
+      p.numero_parte,
+      p.descripcion,
+      p.metodo_pago,
+      nombrePerfil(p.vendido_por)
+    ].join(" ")).includes(q);
+
+    return coincideBusqueda && coincideFamilia(p, filtroFamilia);
+  });
 }
 
 function pintarTabla() {
@@ -534,7 +570,15 @@ function pintarTabla() {
 
   if (!filtradas.length) {
     tbody.innerHTML = `<tr><td colspan="8">No hay piezas con ese filtro.</td></tr>`;
+    setStatus("tableStatus", `Sin resultados. Prueba otra familia o limpia los filtros.`, "");
     return;
+  }
+
+  const filtrosActivos = filtroTabla || filtroFamilia;
+  if (filtrosActivos) {
+    setStatus("tableStatus", `${filtradas.length} de ${piezas.length} pieza(s) encontradas.`, "ok");
+  } else {
+    setStatus("tableStatus", `${piezas.length} piezas cargadas.`, "ok");
   }
 
   filtradas.forEach((p) => {
@@ -1486,6 +1530,18 @@ function registrarEventos() {
   $("searchAdmin").addEventListener("input", (event) => {
     filtroTabla = event.target.value;
     pintarTabla();
+  });
+  $("familiaAdmin")?.addEventListener("change", (event) => {
+    filtroFamilia = event.target.value;
+    pintarTabla();
+  });
+  $("limpiarFiltrosAdmin")?.addEventListener("click", () => {
+    filtroTabla = "";
+    filtroFamilia = "";
+    if ($("searchAdmin")) $("searchAdmin").value = "";
+    if ($("familiaAdmin")) $("familiaAdmin").value = "";
+    pintarTabla();
+    setStatus("tableStatus", `${piezas.length} piezas cargadas.`, "ok");
   });
   configurarDropzone();
 }
