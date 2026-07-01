@@ -56,6 +56,193 @@ const familiasAdmin = {
   electrico: ["modulo", "computadora", "ecu", "bcm", "arnes", "cableado", "switch", "boton", "control", "pantalla", "estereo", "cluster", "tablero instrumentos", "sensor", "chicote", "elevador", "motor elevador"]
 };
 
+const familiasCaptura = {
+  MOTOR: { prefijo: "AVM", nombre: "Motor / mecánica" },
+  CARROCERIA: { prefijo: "AVC", nombre: "Carrocería" },
+  ELECTRICOS: { prefijo: "AVE", nombre: "Eléctricos / módulos" },
+  INTERIORES: { prefijo: "AVI", nombre: "Interiores" },
+  SUSPENSION: { prefijo: "AVS", nombre: "Suspensión / dirección" },
+  ENFRIAMIENTO: { prefijo: "AVF", nombre: "Enfriamiento / A/C" },
+  TRANSMISION: { prefijo: "AVT", nombre: "Transmisión" },
+  CRISTALES: { prefijo: "AVG", nombre: "Cristales / vidrios" }
+};
+
+const camposMayusculas = ["folio", "pieza", "marca", "modelo", "anio", "color", "numeroParte", "descripcion"];
+const ESTADO_DEFAULT_CAPTURA = "USADO ORIGINAL";
+let ultimoFolioGenerado = "";
+
+
+function mayusculas(valor) {
+  return String(valor || "").toLocaleUpperCase("es-MX").trim();
+}
+
+function setFolioAyuda(mensaje, tipo = "") {
+  const el = $("folioAyuda");
+  if (!el) return;
+  el.textContent = mensaje || "";
+  el.style.color = tipo === "err" ? "var(--danger)" : tipo === "ok" ? "var(--ok)" : "";
+}
+
+function familiaDesdePrefijo(prefijo) {
+  const limpio = mayusculas(prefijo);
+  return Object.entries(familiasCaptura).find(([, info]) => info.prefijo === limpio)?.[0] || "";
+}
+
+function prefijoDesdeFolio(folio) {
+  const match = mayusculas(folio).match(/^([A-Z]+)-\d+$/);
+  return match?.[1] || "";
+}
+
+function numeroDesdeFolio(folio, prefijo) {
+  const match = mayusculas(folio).match(new RegExp(`^${prefijo}-(\\d+)$`));
+  return match ? Number(match[1]) : 0;
+}
+
+function formatearFolio(prefijo, numero) {
+  const ancho = numero <= 999 ? 3 : String(numero).length;
+  return `${prefijo}-${String(numero).padStart(ancho, "0")}`;
+}
+
+function seleccionarFamiliaPorFolio(folio) {
+  const familia = familiaDesdePrefijo(prefijoDesdeFolio(folio));
+  const select = $("familiaCaptura");
+  if (select) select.value = familia;
+}
+
+async function maximoFolioPorPrefijo(prefijo) {
+  const prefijoLimpio = mayusculas(prefijo);
+  if (!prefijoLimpio) return 0;
+
+  let maximo = 0;
+  (piezas || []).forEach((pieza) => {
+    maximo = Math.max(maximo, numeroDesdeFolio(pieza.folio, prefijoLimpio));
+  });
+
+  try {
+    const { data, error } = await avDB
+      .from("piezas")
+      .select("folio")
+      .ilike("folio", `${prefijoLimpio}-%`)
+      .range(0, 9999);
+
+    if (error) throw error;
+    (data || []).forEach((pieza) => {
+      maximo = Math.max(maximo, numeroDesdeFolio(pieza.folio, prefijoLimpio));
+    });
+  } catch (error) {
+    console.warn("No se pudo calcular folio desde Supabase. Se usará inventario cargado:", error.message);
+  }
+
+  return maximo;
+}
+
+async function generarSiguienteFolio(prefijo) {
+  const maximo = await maximoFolioPorPrefijo(prefijo);
+  return formatearFolio(prefijo, maximo + 1);
+}
+
+async function folioExiste(folio, idIgnorado = "") {
+  const folioLimpio = mayusculas(folio);
+  if (!folioLimpio) return false;
+
+  const local = (piezas || []).find((pieza) => mayusculas(pieza.folio) === folioLimpio && pieza.id !== idIgnorado);
+  if (local) return true;
+
+  const { data, error } = await avDB
+    .from("piezas")
+    .select("id, folio")
+    .eq("folio", folioLimpio)
+    .maybeSingle();
+
+  if (error) throw error;
+  return Boolean(data && data.id !== idIgnorado);
+}
+
+async function autollenarFolio(forzar = false) {
+  const familia = $("familiaCaptura")?.value || "";
+  const info = familiasCaptura[familia];
+  const folioInput = $("folio");
+  if (!info || !folioInput) {
+    setFolioAyuda("");
+    return "";
+  }
+
+  const valorActual = mayusculas(folioInput.value);
+  const puedeReemplazar = forzar || !valorActual || valorActual === ultimoFolioGenerado;
+  if (!puedeReemplazar) {
+    setFolioAyuda("ID escrito manualmente. Presiona Generar siguiente ID si quieres reemplazarlo.");
+    return valorActual;
+  }
+
+  setFolioAyuda("Calculando siguiente ID...");
+  const siguiente = await generarSiguienteFolio(info.prefijo);
+  folioInput.value = siguiente;
+  ultimoFolioGenerado = siguiente;
+  setFolioAyuda(`Siguiente libre sugerido: ${siguiente}`, "ok");
+  return siguiente;
+}
+
+async function asegurarFolioAntesDeGuardar(payload, idActual) {
+  if (idActual) return payload;
+
+  const familia = $("familiaCaptura")?.value || "";
+  const info = familiasCaptura[familia];
+
+  if (!payload.folio && info) {
+    payload.folio = await generarSiguienteFolio(info.prefijo);
+    $("folio").value = payload.folio;
+  }
+
+  if (!payload.folio) {
+    throw new Error("Selecciona una familia o escribe un ID antes de guardar.");
+  }
+
+  const existe = await folioExiste(payload.folio, idActual);
+  if (!existe) return payload;
+
+  if (!info) {
+    throw new Error(`El ID ${payload.folio} ya existe. Cambia el ID o selecciona una familia para generar uno nuevo.`);
+  }
+
+  const nuevoFolio = await generarSiguienteFolio(info.prefijo);
+  payload.folio = nuevoFolio;
+  $("folio").value = nuevoFolio;
+  ultimoFolioGenerado = nuevoFolio;
+  setFolioAyuda(`El ID anterior ya existía. Se usará ${nuevoFolio}.`, "ok");
+  return payload;
+}
+
+function configurarMayusculasAutomaticas() {
+  camposMayusculas.forEach((idCampo) => {
+    const campo = $(idCampo);
+    if (!campo) return;
+
+    campo.addEventListener("input", () => {
+      const inicio = campo.selectionStart;
+      const fin = campo.selectionEnd;
+      const valor = campo.value;
+      const convertido = valor.toLocaleUpperCase("es-MX");
+      if (valor === convertido) return;
+      campo.value = convertido;
+      if (typeof campo.setSelectionRange === "function") {
+        campo.setSelectionRange(inicio, fin);
+      }
+    });
+  });
+}
+
+function configurarCapturaRapida() {
+  configurarMayusculasAutomaticas();
+
+  $("familiaCaptura")?.addEventListener("change", () => autollenarFolio(true));
+  $("generarFolioBtn")?.addEventListener("click", () => autollenarFolio(true));
+  $("folio")?.addEventListener("blur", () => {
+    const folio = mayusculas($("folio").value);
+    $("folio").value = folio;
+    seleccionarFamiliaPorFolio(folio);
+  });
+}
+
 function textoFamiliaPieza(p) {
   return normalizar([
     p.pieza,
@@ -362,16 +549,25 @@ function resumenVendedores() {
   return [...mapa.values()].sort((a, b) => b.total - a.total || b.piezas - a.piezas);
 }
 
-function limpiarFormulario() {
+function limpiarFormulario(opciones = {}) {
+  const preservarVehiculo = Boolean(opciones.preservarVehiculo && $("mantenerVehiculo")?.checked);
+  const guardado = preservarVehiculo ? {
+    familia: $("familiaCaptura")?.value || "",
+    marca: $("marca").value,
+    modelo: $("modelo").value,
+    anio: $("anio").value
+  } : null;
+
   $("piezaId").value = "";
+  if ($("familiaCaptura")) $("familiaCaptura").value = guardado?.familia || "";
   $("folio").value = "";
   $("pieza").value = "";
-  $("marca").value = "";
-  $("modelo").value = "";
-  $("anio").value = "";
+  $("marca").value = guardado?.marca || "";
+  $("modelo").value = guardado?.modelo || "";
+  $("anio").value = guardado?.anio || "";
   $("lado").value = "";
   $("color").value = "";
-  $("estado").value = "";
+  $("estado").value = ESTADO_DEFAULT_CAPTURA;
   $("precio").value = "";
   $("numeroParte").value = "";
   $("descripcion").value = "";
@@ -379,22 +575,28 @@ function limpiarFormulario() {
   resetFotosTrabajo();
   pintarPreview();
   $("formTitle").textContent = "Nueva pieza";
+  ultimoFolioGenerado = "";
+  setFolioAyuda("");
   setStatus("formStatus", "");
+
+  if (preservarVehiculo && guardado?.familia) {
+    autollenarFolio(true);
+  }
 }
 
 function datosFormulario() {
   return {
-    folio: $("folio").value.trim() || null,
-    pieza: $("pieza").value.trim(),
-    marca: $("marca").value.trim() || null,
-    modelo: $("modelo").value.trim() || null,
-    anio: $("anio").value.trim() || null,
-    color: $("color").value.trim() || null,
-    lado: $("lado").value.trim() || null,
-    estado: $("estado").value.trim() || ($("disponible").checked ? "Disponible" : "Vendido"),
+    folio: mayusculas($("folio").value) || null,
+    pieza: mayusculas($("pieza").value),
+    marca: mayusculas($("marca").value) || null,
+    modelo: mayusculas($("modelo").value) || null,
+    anio: mayusculas($("anio").value) || null,
+    color: mayusculas($("color").value) || null,
+    lado: mayusculas($("lado").value) || null,
+    estado: mayusculas($("estado").value) || ESTADO_DEFAULT_CAPTURA,
     precio: $("precio").value ? Number($("precio").value) : null,
-    numero_parte: $("numeroParte").value.trim() || null,
-    descripcion: $("descripcion").value.trim() || null,
+    numero_parte: mayusculas($("numeroParte").value) || null,
+    descripcion: mayusculas($("descripcion").value) || null,
     disponible: $("disponible").checked
   };
 }
@@ -484,6 +686,7 @@ async function cargarPiezas() {
   pintarTabla();
   pintarStats();
   pintarVentasResumen();
+  pintarResumenFamilias();
   setStatus("tableStatus", `${piezas.length} piezas cargadas.`, "ok");
 }
 
@@ -526,6 +729,37 @@ function pintarVentasResumen() {
           <strong>${dinero(venta.precio_venta)}</strong>
           <small>${escapeHtml(venta.vendedor_nombre || nombreDesdeEmail(venta.vendedor_email))} · ${fechaCorta(venta.vendido_en)}</small>
         </div>
+      `).join("")}
+    </div>
+  `;
+}
+
+function resumenFamiliasCaptura() {
+  return Object.entries(familiasCaptura).map(([clave, info]) => {
+    const numeros = (piezas || [])
+      .map((pieza) => numeroDesdeFolio(pieza.folio, info.prefijo))
+      .filter((numero) => numero > 0);
+    const maximo = numeros.length ? Math.max(...numeros) : 0;
+    const ultimo = maximo ? formatearFolio(info.prefijo, maximo) : "Sin piezas";
+    const siguiente = formatearFolio(info.prefijo, maximo + 1);
+    return { clave, ...info, total: numeros.length, maximo, ultimo, siguiente };
+  });
+}
+
+function pintarResumenFamilias() {
+  const contenedor = $("familiasResumen");
+  if (!contenedor) return;
+
+  const resumen = resumenFamiliasCaptura();
+  contenedor.innerHTML = `
+    <div class="sales-grid">
+      ${resumen.map((familia) => `
+        <article class="seller-card">
+          <strong>${escapeHtml(familia.prefijo)}</strong>
+          <span>${escapeHtml(familia.nombre)} · ${familia.total} pieza(s)</span>
+          <b>Sigue: ${escapeHtml(familia.siguiente)}</b>
+          <small style="color:var(--muted)">Último: ${escapeHtml(familia.ultimo)}</small>
+        </article>
       `).join("")}
     </div>
   `;
@@ -854,13 +1088,16 @@ const tablaCrc32 = (() => {
 function editarPieza(p) {
   $("piezaId").value = p.id;
   $("folio").value = p.folio || "";
+  seleccionarFamiliaPorFolio(p.folio || "");
+  ultimoFolioGenerado = "";
+  setFolioAyuda("Editando pieza existente. El ID no se cambia automático.");
   $("pieza").value = p.pieza || "";
   $("marca").value = p.marca || "";
   $("modelo").value = p.modelo || "";
   $("anio").value = p.anio || "";
   $("lado").value = p.lado || "";
   $("color").value = p.color || "";
-  $("estado").value = p.estado || "";
+  $("estado").value = p.estado || ESTADO_DEFAULT_CAPTURA;
   $("precio").value = p.precio || "";
   $("numeroParte").value = p.numero_parte || "";
   $("descripcion").value = p.descripcion || "";
@@ -884,7 +1121,6 @@ async function toggleDisponibilidad(p) {
     setStatus("tableStatus", "Publicando pieza...");
     const payload = auditarPayload({
       disponible: true,
-      estado: "Disponible",
       vendido_por: null,
       vendido_en: null,
       precio_venta: null,
@@ -892,7 +1128,7 @@ async function toggleDisponibilidad(p) {
       nota_venta: null
     });
 
-    const payloadSeguro = extrasDisponibles.auditoriaPiezas ? payload : { disponible: true, estado: "Disponible" };
+    const payloadSeguro = extrasDisponibles.auditoriaPiezas ? payload : { disponible: true };
     const { error } = await avDB.from("piezas").update(payloadSeguro).eq("id", p.id);
 
     if (error) {
@@ -919,7 +1155,6 @@ async function toggleDisponibilidad(p) {
   const vendidoEn = new Date().toISOString();
   const payloadVenta = auditarPayload({
     disponible: false,
-    estado: "Vendido",
     vendido_por: usuarioId(),
     vendido_en: vendidoEn,
     precio_venta: precioVenta,
@@ -928,7 +1163,7 @@ async function toggleDisponibilidad(p) {
   });
   const payloadSeguro = extrasDisponibles.auditoriaPiezas
     ? payloadVenta
-    : { disponible: false, estado: "Vendido" };
+    : { disponible: false };
 
   const { error } = await avDB.from("piezas").update(payloadSeguro).eq("id", p.id);
 
@@ -977,7 +1212,7 @@ async function eliminarPieza(p) {
 async function guardarPieza(event) {
   event.preventDefault();
 
-  const payload = datosFormulario();
+  let payload = datosFormulario();
   if (!payload.pieza) {
     setStatus("formStatus", "La pieza es obligatoria.", "err");
     return;
@@ -990,6 +1225,7 @@ async function guardarPieza(event) {
   let piezaGuardada;
 
   try {
+    payload = await asegurarFolioAntesDeGuardar(payload, idActual);
     if (idActual) {
       const payloadActualizado = auditarPayload(payload, "actualizar");
       const { data, error } = await avDB
@@ -1019,7 +1255,7 @@ async function guardarPieza(event) {
     }
 
     setStatus("formStatus", "Publicación guardada. Fotos y portada actualizadas.", "ok");
-    limpiarFormulario();
+    limpiarFormulario({ preservarVehiculo: true });
     await cargarPiezas();
   } catch (error) {
     setStatus("formStatus", "Error guardando: " + error.message, "err");
@@ -1277,7 +1513,7 @@ function mapearFilaExcel(row) {
     anio: limpiar(n.anio ?? n.ano ?? n.año),
     color: limpiar(n.color),
     lado: limpiar(n.lado),
-    estado: limpiar(n.estado) || (disponible ? "Disponible" : "Vendido"),
+    estado: limpiar(n.estado) || ESTADO_DEFAULT_CAPTURA,
     precio: numero(n.precio),
     numero_parte: limpiar(n.numeroparte ?? n.numerodeparte ?? n.noparte ?? n.nparte),
     descripcion: limpiar(n.descripcion ?? n.observaciones ?? n.detalles),
@@ -1518,10 +1754,11 @@ function escapeHtml(value) {
 }
 
 function registrarEventos() {
+  configurarCapturaRapida();
   $("loginForm").addEventListener("submit", iniciarSesion);
   $("logoutBtn").addEventListener("click", cerrarSesion);
   $("piezaForm").addEventListener("submit", guardarPieza);
-  $("resetBtn").addEventListener("click", limpiarFormulario);
+  $("resetBtn").addEventListener("click", () => limpiarFormulario({ preservarVehiculo: false }));
   $("excelInput").addEventListener("change", importarExcel);
   $("exportExcel").addEventListener("click", exportarExcel);
   $("exportMonthlyCut")?.addEventListener("click", exportarCorteMensual);
