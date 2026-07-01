@@ -57,14 +57,18 @@ const familiasAdmin = {
 };
 
 const familiasCaptura = {
-  MOTOR: { prefijo: "AVM", nombre: "Motor / mecánica" },
-  CARROCERIA: { prefijo: "AVC", nombre: "Carrocería" },
-  ELECTRICOS: { prefijo: "AVE", nombre: "Eléctricos / módulos" },
-  INTERIORES: { prefijo: "AVI", nombre: "Interiores" },
-  SUSPENSION: { prefijo: "AVS", nombre: "Suspensión / dirección" },
-  ENFRIAMIENTO: { prefijo: "AVF", nombre: "Enfriamiento / A/C" },
-  TRANSMISION: { prefijo: "AVT", nombre: "Transmisión" },
-  CRISTALES: { prefijo: "AVG", nombre: "Cristales / vidrios" }
+  CARROCERIA: { prefijo: "AVC", nombre: "Autopartes Vences Carrocería" },
+  ILUMINACION: { prefijo: "AVI", nombre: "Autopartes Vences Iluminación" },
+  ELECTRICO: { prefijo: "AVE", nombre: "Autopartes Vences Eléctrico" },
+  MOTOR: { prefijo: "AVM", nombre: "Autopartes Vences Motor" },
+  TRANSMISION: { prefijo: "AVT", nombre: "Autopartes Vences Transmisión" },
+  SUSPENSION: { prefijo: "AVS", nombre: "Autopartes Vences Suspensión" },
+  FRENOS: { prefijo: "AVF", nombre: "Autopartes Vences Frenos" },
+  RINES_LLANTAS: { prefijo: "AVR", nombre: "Autopartes Vences Rines/Llantas" },
+  ENFRIAMIENTO: { prefijo: "AVN", nombre: "Autopartes Vences Enfriamiento" },
+  INTERIOR: { prefijo: "AVD", nombre: "Autopartes Vences Interior" },
+  CRISTALES: { prefijo: "AVX", nombre: "Autopartes Vences Cristales" },
+  ACCESORIOS: { prefijo: "AVA", nombre: "Autopartes Vences Accesorios" }
 };
 
 const camposMayusculas = ["folio", "pieza", "marca", "modelo", "anio", "color", "numeroParte", "descripcion"];
