@@ -603,8 +603,25 @@
           <div class="section-title"><span>01</span> Datos principales</div>
 
           <div class="field">
+            <label for="familiaCaptura">Familia / prefijo</label>
+            <select id="familiaCaptura">
+              <option value="">Seleccionar familia</option>
+              <option value="MOTOR">AVM · Motor / mecánica</option>
+              <option value="CARROCERIA">AVC · Carrocería</option>
+              <option value="ELECTRICOS">AVE · Eléctricos / módulos</option>
+              <option value="INTERIORES">AVI · Interiores</option>
+              <option value="SUSPENSION">AVS · Suspensión / dirección</option>
+              <option value="ENFRIAMIENTO">AVF · Enfriamiento / A/C</option>
+              <option value="TRANSMISION">AVT · Transmisión</option>
+              <option value="CRISTALES">AVG · Cristales / vidrios</option>
+            </select>
+          </div>
+
+          <div class="field">
             <label for="folio">ID / Folio</label>
-            <input id="folio" placeholder="Ej. 041">
+            <input id="folio" placeholder="Se genera al elegir familia" autocomplete="off">
+            <button class="btn mini" id="generarFolioBtn" type="button">Generar siguiente ID</button>
+            <small id="folioAyuda" class="hint"></small>
           </div>
 
           <div class="field">
@@ -614,19 +631,79 @@
 
           <div class="field full">
             <label for="pieza">Pieza *</label>
-            <input id="pieza" required placeholder="Puerta delantera">
+            <input id="pieza" list="listaPiezas" required placeholder="PUERTA DELANTERA">
+            <datalist id="listaPiezas">
+              <option value="FARO DERECHO">
+              <option value="FARO IZQUIERDO">
+              <option value="CALAVERA DERECHA">
+              <option value="CALAVERA IZQUIERDA">
+              <option value="PUERTA DELANTERA DERECHA">
+              <option value="PUERTA DELANTERA IZQUIERDA">
+              <option value="PUERTA TRASERA DERECHA">
+              <option value="PUERTA TRASERA IZQUIERDA">
+              <option value="DEFENSA DELANTERA">
+              <option value="DEFENSA TRASERA">
+              <option value="COFRE">
+              <option value="CAJUELA">
+              <option value="SALPICADERA DERECHA">
+              <option value="SALPICADERA IZQUIERDA">
+              <option value="ESPEJO DERECHO">
+              <option value="ESPEJO IZQUIERDO">
+              <option value="PARRILLA">
+              <option value="MOLDURA">
+              <option value="ELEVADOR DE CRISTAL">
+              <option value="SWITCH DE VENTANA ELECTRICA">
+              <option value="BOSTER CON BOMBA">
+              <option value="BOMBA CON BOSTER">
+              <option value="RADIADOR">
+              <option value="CONDENSADOR">
+              <option value="VENTILADOR">
+              <option value="COMPRESOR DE A/C">
+              <option value="ALTERNADOR">
+              <option value="MARCHA">
+              <option value="COMPUTADORA">
+              <option value="MODULO">
+              <option value="TABLERO">
+              <option value="BOLSA DE AIRE">
+              <option value="VOLANTE">
+              <option value="ASIENTO">
+              <option value="RIN">
+              <option value="LLANTA">
+            </datalist>
           </div>
 
           <div class="section-title"><span>02</span> Vehículo compatible</div>
 
           <div class="field">
             <label for="marca">Marca</label>
-            <input id="marca" placeholder="Chevrolet">
+            <input id="marca" list="listaMarcas" placeholder="CHEVROLET">
+            <datalist id="listaMarcas">
+              <option value="NISSAN">
+              <option value="CHEVROLET">
+              <option value="FORD">
+              <option value="VOLKSWAGEN">
+              <option value="VW">
+              <option value="TOYOTA">
+              <option value="HONDA">
+              <option value="MAZDA">
+              <option value="KIA">
+              <option value="HYUNDAI">
+              <option value="RENAULT">
+              <option value="DODGE">
+              <option value="JEEP">
+              <option value="CHRYSLER">
+              <option value="MITSUBISHI">
+              <option value="PEUGEOT">
+              <option value="SEAT">
+              <option value="BMW">
+              <option value="MERCEDES BENZ">
+              <option value="AUDI">
+            </datalist>
           </div>
 
           <div class="field">
             <label for="modelo">Modelo</label>
-            <input id="modelo" placeholder="Beat">
+            <input id="modelo" placeholder="BEAT">
           </div>
 
           <div class="field">
@@ -638,25 +715,42 @@
             <label for="lado">Lado</label>
             <select id="lado">
               <option value="">N/C</option>
-              <option>Izquierdo</option>
-              <option>Derecho</option>
-              <option>Delantero</option>
-              <option>Trasero</option>
-              <option>Superior</option>
-              <option>Inferior</option>
+              <option value="DERECHO">DERECHO</option>
+              <option value="IZQUIERDO">IZQUIERDO</option>
+              <option value="DELANTERO">DELANTERO</option>
+              <option value="TRASERO">TRASERO</option>
+              <option value="DELANTERO DERECHO">DELANTERO DERECHO</option>
+              <option value="DELANTERO IZQUIERDO">DELANTERO IZQUIERDO</option>
+              <option value="TRASERO DERECHO">TRASERO DERECHO</option>
+              <option value="TRASERO IZQUIERDO">TRASERO IZQUIERDO</option>
+              <option value="SUPERIOR">SUPERIOR</option>
+              <option value="INFERIOR">INFERIOR</option>
             </select>
           </div>
+
+          <label class="field full checkrow">
+            <span>Mantener marca, modelo y año al guardar la siguiente pieza</span>
+            <input id="mantenerVehiculo" type="checkbox" checked>
+          </label>
 
           <div class="section-title"><span>03</span> Detalles de la pieza</div>
 
           <div class="field">
             <label for="color">Color</label>
-            <input id="color" placeholder="Blanco">
+            <input id="color" placeholder="BLANCO">
           </div>
 
           <div class="field">
-            <label for="estado">Estado</label>
-            <input id="estado" placeholder="Usado original">
+            <label for="estado">Estado / condición</label>
+            <select id="estado">
+              <option value="USADO ORIGINAL" selected>USADO ORIGINAL</option>
+              <option value="USADO NACIONAL">USADO NACIONAL</option>
+              <option value="NUEVO GENERICO">NUEVO GENÉRICO</option>
+              <option value="REPARADO">REPARADO</option>
+              <option value="CON DETALLE">CON DETALLE</option>
+              <option value="PARA REPARAR">PARA REPARAR</option>
+              <option value="DISPONIBLE">DISPONIBLE</option>
+            </select>
           </div>
 
           <div class="field full">
@@ -720,6 +814,18 @@
           </div>
           <div id="ventasResumen">
             <p class="empty-state">Cargando resumen de ventas...</p>
+          </div>
+        </div>
+
+        <div class="sales-box admin-only">
+          <div class="sales-head">
+            <div>
+              <h3>Familias e IDs</h3>
+              <span>La página calcula el último folio y el siguiente número por prefijo.</span>
+            </div>
+          </div>
+          <div id="familiasResumen">
+            <p class="empty-state">Cargando familias...</p>
           </div>
         </div>
 
