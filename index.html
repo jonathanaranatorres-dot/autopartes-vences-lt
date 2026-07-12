@@ -65,7 +65,7 @@
   }
   </script>
 
-  <link rel="stylesheet" href="style-v2.css?v=10" />
+  <link rel="stylesheet" href="style-v2.css?v=11" />
 </head>
 <body>
   <header class="top-strip">
@@ -140,6 +140,15 @@
 
     <section class="catalog" id="catalogo">
       <div class="container">
+        <div class="mobile-catalog-start" aria-labelledby="mobileCatalogTitle">
+          <span class="mobile-catalog-kicker">Catálogo rápido</span>
+          <h1 id="mobileCatalogTitle">¿Qué pieza estás buscando?</h1>
+          <p>Escribe la pieza, marca o modelo. También puedes filtrar por tu vehículo.</p>
+          <div class="mobile-catalog-count" aria-live="polite">
+            <strong id="mobileCatalogCount">Cargando inventario...</strong>
+          </div>
+        </div>
+
         <div class="section-head">
           <div>
             <p class="eyebrow dark">Catálogo</p>
@@ -151,11 +160,21 @@
           </div>
         </div>
 
-        <div class="filters" aria-label="Filtros del catálogo">
+        <div class="filters" id="catalogFilters" aria-label="Filtros del catálogo">
           <label class="search-field">
             <span>Buscar</span>
-            <input id="searchInput" type="search" placeholder="Ej. faro de mazda, puerta beat, calavera sentra..." autocomplete="off" />
+            <input id="searchInput" type="search" placeholder="Ej. faro de mazda, puerta beat, calavera sentra..." autocomplete="off" enterkeyhint="search" />
           </label>
+
+          <div class="mobile-filter-actions">
+            <button class="mobile-filter-toggle" id="mobileFilterToggle" type="button" aria-expanded="false" aria-controls="catalogFilters">
+              <span>Filtrar por vehículo</span>
+              <span class="mobile-filter-badge" id="mobileFilterBadge" hidden>0</span>
+              <span class="mobile-filter-chevron" aria-hidden="true">⌄</span>
+            </button>
+            <button class="mobile-clear-filters" id="mobileClearFiltersBtn" type="button">Limpiar</button>
+          </div>
+
           <label>
             <span>Pieza</span>
             <select id="piezaSelect"><option value="">Todas</option></select>
@@ -176,6 +195,7 @@
             <span>Lado</span>
             <select id="ladoSelect"><option value="">Todos</option></select>
           </label>
+          <button class="mobile-apply-filters" id="mobileApplyFiltersBtn" type="button">Ver resultados</button>
         </div>
 
         <div class="quick-chips" aria-label="Búsquedas rápidas">
@@ -402,7 +422,7 @@
   </noscript>
 
   <script src="supabase-config.js?v=4" defer></script>
-  <script src="app-v2.js?v=18" defer></script>
+  <script src="app-v2.js?v=19" defer></script>
 </body>
 </html>
 
