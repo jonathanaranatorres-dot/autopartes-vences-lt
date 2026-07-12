@@ -82,6 +82,12 @@
 
     id("refreshBtn")?.addEventListener("click", () => cargarInventario({ forzarRed: true }));
     id("clearFiltersBtn")?.addEventListener("click", limpiarFiltros);
+    id("mobileFilterToggle")?.addEventListener("click", alternarFiltrosMoviles);
+    id("mobileApplyFiltersBtn")?.addEventListener("click", aplicarFiltrosMoviles);
+    id("mobileClearFiltersBtn")?.addEventListener("click", () => {
+      limpiarFiltros();
+      cerrarFiltrosMoviles();
+    });
     id("navCartBtn")?.addEventListener("click", abrirCarrito);
     id("heroCartBtn")?.addEventListener("click", abrirCarrito);
 
@@ -117,6 +123,41 @@
       if (event.key === "ArrowLeft") cambiarFotoDetalle(-1);
       if (event.key === "ArrowRight") cambiarFotoDetalle(1);
     });
+  }
+
+  function alternarFiltrosMoviles() {
+    const filtros = id("catalogFilters");
+    const boton = id("mobileFilterToggle");
+    if (!filtros || !boton) return;
+
+    const abierto = !filtros.classList.contains("mobile-filters-open");
+    filtros.classList.toggle("mobile-filters-open", abierto);
+    document.body.classList.toggle("mobile-filter-panel-open", abierto);
+    boton.setAttribute("aria-expanded", String(abierto));
+  }
+
+  function cerrarFiltrosMoviles() {
+    const filtros = id("catalogFilters");
+    const boton = id("mobileFilterToggle");
+    filtros?.classList.remove("mobile-filters-open");
+    document.body.classList.remove("mobile-filter-panel-open");
+    boton?.setAttribute("aria-expanded", "false");
+  }
+
+  function aplicarFiltrosMoviles() {
+    cerrarFiltrosMoviles();
+    const destino = id("statusCatalogo") || id("productsGrid");
+    destino?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function actualizarControlesMoviles() {
+    const filtros = getFiltros();
+    const activos = [filtros.pieza, filtros.marca, filtros.modelo, filtros.anio, filtros.lado].filter(Boolean).length;
+    const badge = id("mobileFilterBadge");
+    if (badge) {
+      badge.textContent = String(activos);
+      badge.hidden = activos === 0;
+    }
   }
 
   async function cargarInventario(opciones = {}) {
@@ -591,6 +632,7 @@
     });
 
     piezasVisibles = PAGE_SIZE;
+    actualizarControlesMoviles();
     mostrarProductos(filtrados);
   }
 
@@ -712,6 +754,8 @@
     const version = ++renderVersion;
     const total = lista.length;
     const visibles = lista.slice(0, piezasVisibles);
+    const contadorMovil = id("mobileCatalogCount");
+    if (contadorMovil) contadorMovil.textContent = total === 1 ? "1 pieza encontrada" : `${total} piezas encontradas`;
 
     grid.innerHTML = "";
     grid.classList.toggle("one-item", visibles.length === 1);
@@ -957,7 +1001,7 @@
     if (!total) return;
     const hayFiltros = filtrosActivos();
     const unidad = total === 1 ? "pieza" : "piezas";
-    const contexto = hayFiltros ? "resultado" : `${unidad} disponible${total === 1 ? "" : "s"}`;
+    const contexto = hayFiltros ? (total === 1 ? "resultado" : "resultados") : `${unidad} disponible${total === 1 ? "" : "s"}`;
 
     if (visibles < total) {
       setStatus(`Mostrando ${visibles} de ${total} ${contexto}.`, "ok");
@@ -965,7 +1009,7 @@
     }
 
     if (hayFiltros) {
-      setStatus(`${total} ${total === 1 ? "resultado" : "resultados"} encontrados.`, "ok");
+      setStatus(total === 1 ? "1 resultado encontrado." : `${total} resultados encontrados.`, "ok");
       return;
     }
 
