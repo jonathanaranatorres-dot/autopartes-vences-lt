@@ -32,6 +32,7 @@
   let piezasVisibles = PAGE_SIZE;
   let filtroTimer = null;
   let renderVersion = 0;
+  let imageObserver = null;
 
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => Array.from(document.querySelectorAll(selector));
@@ -124,7 +125,7 @@
       const data = await cargarPiezasDesdeSupabaseREST();
       usarInventario(data.map(normalizarProducto), textoConteoPiezas(data.length));
       guardarCache(productos);
-      cargarIndiceFotosEnSegundoPlano();
+      // Las fotos se solicitan solo para las piezas visibles; evita descargar todo el índice al abrir la página.
     } catch (error) {
       console.warn("No se pudo cargar Supabase REST:", error);
       const cache = opciones.forzarRed ? null : leerCache();
@@ -271,10 +272,10 @@
     if (!texto) return "";
 
     const driveFile = texto.match(/drive\.google\.com\/file\/d\/([^/]+)/i);
-    if (driveFile?.[1]) return `https://drive.google.com/thumbnail?id=${encodeURIComponent(driveFile[1])}&sz=w1000`;
+    if (driveFile?.[1]) return `https://drive.google.com/thumbnail?id=${encodeURIComponent(driveFile[1])}&sz=w720`;
 
     const driveOpen = texto.match(/[?&]id=([^&]+)/i);
-    if (texto.includes("drive.google.com") && driveOpen?.[1]) return `https://drive.google.com/thumbnail?id=${encodeURIComponent(driveOpen[1])}&sz=w1000`;
+    if (texto.includes("drive.google.com") && driveOpen?.[1]) return `https://drive.google.com/thumbnail?id=${encodeURIComponent(driveOpen[1])}&sz=w720`;
 
     return texto;
   }
@@ -686,7 +687,7 @@
 
     if (total) total.textContent = lista.length;
     if (marcas) marcas.textContent = valoresUnicos(lista, "marca").length;
-    if (fotos) fotos.textContent = lista.filter((p) => (p.fotoCount || p.fotos.length) > 0).length;
+    if (fotos) fotos.textContent = lista.filter((p) => Number(p.precio || 0) > 0).length;
 
     [total, marcas, fotos].forEach((el) => el?.classList.remove("stat-loading"));
   }
@@ -741,26 +742,26 @@
       }
       card.style.setProperty("--card-index", String(index));
 
-      const abrir = () => abrirDetalle(producto);
-      card.addEventListener("click", abrir);
-      card.addEventListener("keydown", (event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          abrirDetalle(producto);
-        }
+      const productUrl = crearUrlProducto(producto);
+      photoBtn.href = productUrl;
+      viewBtn.href = productUrl;
+
+      card.addEventListener("click", (event) => {
+        if (event.target.closest("a, button")) return;
+        window.location.assign(productUrl);
       });
-      viewBtn.addEventListener("click", (event) => { event.stopPropagation(); abrirDetalle(producto); });
       cartBtn.addEventListener("click", (event) => { event.stopPropagation(); agregarAlCarrito(producto); });
-      photoBtn.addEventListener("click", (event) => { event.stopPropagation(); abrirDetalle(producto); });
 
       if (producto.fotos.length) {
-        img.src = producto.fotos[0];
+        const fotoPrincipal = producto.fotos[0];
         img.alt = tituloProducto(producto);
-        img.loading = index < 2 ? "eager" : "lazy";
+        img.loading = index === 0 ? "eager" : "lazy";
         img.decoding = "async";
-        img.fetchPriority = index < 2 ? "high" : "low";
+        img.fetchPriority = index === 0 ? "high" : "low";
+        if (index === 0) img.src = fotoPrincipal;
+        else img.dataset.src = fotoPrincipal;
         const cantidad = producto.fotoCount || producto.fotos.length;
-        count.textContent = `${cantidad} foto${cantidad === 1 ? "" : "s"}`;
+        count.textContent = cantidad > 1 ? `${cantidad} fotos` : "Ver foto";
       } else {
         img.remove();
         count.textContent = producto.fotosCargando ? "Cargando foto" : "Sin foto";
@@ -772,6 +773,7 @@
     });
 
     grid.appendChild(fragment);
+    activarCargaDiferidaImagenes(grid);
     actualizarBotonCargarMas(total, visibles.length);
     actualizarEstadoCatalogo(total, visibles.length);
 
@@ -782,6 +784,33 @@
         mostrarProductos(filtrados);
       }
     }).catch((error) => console.warn("No se pudieron cargar fotos visibles:", error));
+  }
+
+  function activarCargaDiferidaImagenes(contenedor) {
+    imageObserver?.disconnect();
+    const pendientes = [...contenedor.querySelectorAll("img[data-src]")];
+    if (!pendientes.length) return;
+
+    const cargar = (img) => {
+      if (!img?.dataset.src) return;
+      img.src = img.dataset.src;
+      delete img.dataset.src;
+    };
+
+    if (!("IntersectionObserver" in window)) {
+      pendientes.forEach(cargar);
+      return;
+    }
+
+    imageObserver = new IntersectionObserver((entradas, observer) => {
+      entradas.forEach((entrada) => {
+        if (!entrada.isIntersecting) return;
+        cargar(entrada.target);
+        observer.unobserve(entrada.target);
+      });
+    }, { rootMargin: "220px 0px", threshold: 0.01 });
+
+    pendientes.forEach((img) => imageObserver.observe(img));
   }
 
   function mostrarSinResultados(grid) {
