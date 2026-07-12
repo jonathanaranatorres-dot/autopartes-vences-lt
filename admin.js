@@ -1318,16 +1318,17 @@ async function guardarFotosTrabajo(piezaId) {
 }
 
 async function subirFotoNueva(piezaId, file, orden) {
-  const extension = file.name.includes(".") ? file.name.split(".").pop().toLowerCase() : "jpg";
+  const archivoWeb = await optimizarImagenParaWeb(file);
+  const extension = archivoWeb.name.includes(".") ? archivoWeb.name.split(".").pop().toLowerCase() : "jpg";
   const sello = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const path = `${piezaId}/${sello}-${orden + 1}-${slug(file.name)}.${extension}`;
+  const path = `${piezaId}/${sello}-${orden + 1}-${slug(archivoWeb.name)}.${extension}`;
 
   const { error: uploadError } = await avDB.storage
     .from(bucket)
-    .upload(path, file, {
-      cacheControl: "3600",
+    .upload(path, archivoWeb, {
+      cacheControl: "31536000",
       upsert: false,
-      contentType: file.type || "image/jpeg"
+      contentType: archivoWeb.type || "image/jpeg"
     });
 
   if (uploadError) throw uploadError;
@@ -1343,6 +1344,43 @@ async function subirFotoNueva(piezaId, file, orden) {
   });
 
   if (insertFotoError) throw insertFotoError;
+}
+
+
+async function optimizarImagenParaWeb(file) {
+  const tiposOptimizables = new Set(["image/jpeg", "image/jpg", "image/webp"]);
+  if (!file || !tiposOptimizables.has(String(file.type || "").toLowerCase())) return file;
+
+  const MAX_LADO = 1600;
+  const CALIDAD = 0.82;
+
+  try {
+    const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
+    const escala = Math.min(1, MAX_LADO / Math.max(bitmap.width, bitmap.height));
+
+    if (escala === 1 && file.size <= 900 * 1024) {
+      bitmap.close?.();
+      return file;
+    }
+
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(bitmap.width * escala));
+    canvas.height = Math.max(1, Math.round(bitmap.height * escala));
+    const ctx = canvas.getContext("2d", { alpha: false });
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close?.();
+
+    const tipoSalida = file.type === "image/webp" ? "image/webp" : "image/jpeg";
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, tipoSalida, CALIDAD));
+    if (!blob || blob.size >= file.size) return file;
+
+    const base = file.name.replace(/\.[^.]+$/, "") || "autoparte";
+    const extension = tipoSalida === "image/webp" ? "webp" : "jpg";
+    return new File([blob], `${base}.${extension}`, { type: tipoSalida, lastModified: Date.now() });
+  } catch (error) {
+    console.warn("No se pudo optimizar una foto; se subirá el archivo original:", error);
+    return file;
+  }
 }
 
 function resetFotosTrabajo() {
