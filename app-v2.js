@@ -6,7 +6,8 @@
   const CART_KEY = "carritoAutopartesVencesV2";
   const CACHE_KEY = "avCatalogoPublicoCacheV3";
   const PAGE_SIZE = 12;
-  const REST_PAGE_SIZE = 500;
+  const INITIAL_BATCH_SIZE = 60;
+  const REST_PAGE_SIZE = 1000;
   const PHOTO_BATCH_SIZE = 60;
   const SEARCH_DEBOUNCE_MS = 220;
   const API_TIMEOUT_MS = 14000;
@@ -31,9 +32,8 @@
   let indiceFotoDetalle = 0;
   let piezasVisibles = PAGE_SIZE;
   let filtroTimer = null;
-  let renderVersion = 0;
-  let imageObserver = null;
-  let indiceFotosListo = false;
+  let cargaInventarioVersion = 0;
+  let cacheSaveTimer = null;
 
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => Array.from(document.querySelectorAll(selector));
@@ -161,27 +161,62 @@
   }
 
   async function cargarInventario(opciones = {}) {
-    indiceFotosListo = false;
-    setStatus("Cargando piezas disponibles...", "");
+    const version = ++cargaInventarioVersion;
+    const mantenerActual = productos.length > 0;
+    const cache = opciones.forzarRed ? null : leerCache();
+
+    if (!mantenerActual && cache?.length) {
+      usarInventario(
+        cache.map((row) => normalizarProducto(row, "cache")),
+        "Mostrando inventario guardado mientras comprobamos novedades.",
+        "ok"
+      );
+    } else if (mantenerActual) {
+      setStatus("Actualizando inventario sin ocultar las piezas actuales...", "");
+    } else {
+      setStatus("Cargando piezas disponibles...", "");
+    }
 
     try {
-      const data = await cargarPiezasDesdeSupabaseREST();
-      usarInventario(data.map(normalizarProducto), textoConteoPiezas(data.length));
-      guardarCache(productos);
-      // Solo consulta los ID de foto para contar piezas con imágenes; no descarga las fotografías.
-      cargarIndiceFotosEnSegundoPlano();
+      const primeraPagina = await cargarPaginaPiezas(0, INITIAL_BATCH_SIZE);
+      if (version !== cargaInventarioVersion) return;
+
+      const primeros = reconciliarProductos(
+        primeraPagina.map(normalizarProducto),
+        productos
+      );
+
+      if (primeraPagina.length < INITIAL_BATCH_SIZE) {
+        usarInventario(primeros, textoConteoPiezas(primeros.length));
+        programarGuardarCache();
+        return;
+      }
+
+      const inventarioProvisional = fusionarConInventarioActual(primeros, productos);
+      usarInventario(
+        inventarioProvisional,
+        `Mostrando las piezas más recientes. Completando el catálogo en segundo plano...`,
+        "ok",
+        { mantenerLimite: mantenerActual }
+      );
+
+      cargarRestoInventarioEnSegundoPlano(primeraPagina, version);
     } catch (error) {
       console.warn("No se pudo cargar Supabase REST:", error);
-      const cache = opciones.forzarRed ? null : leerCache();
+      if (version !== cargaInventarioVersion) return;
 
-      if (cache?.length) {
-        usarInventario(cache.map(normalizarProducto), "Mostrando inventario guardado. Toca Actualizar resultados para intentar de nuevo.");
+      if (productos.length) {
+        setStatus("Mostrando inventario guardado. La actualización en vivo no respondió; puedes seguir navegando.", "");
         return;
       }
 
       try {
         const respaldo = await cargarDatosJsonRespaldo();
-        usarInventario(respaldo.map((row) => normalizarProducto(row, "respaldo")), "Mostrando respaldo local. Confirma disponibilidad por WhatsApp.");
+        if (version !== cargaInventarioVersion) return;
+        usarInventario(
+          respaldo.map((row) => normalizarProducto(row, "respaldo")),
+          "Mostrando respaldo local. Confirma disponibilidad por WhatsApp."
+        );
       } catch (fallbackError) {
         console.warn("No se pudo cargar respaldo local:", fallbackError);
         usarInventario([], "No pudimos cargar el inventario. Escríbenos por WhatsApp para revisar disponibilidad.", "err");
@@ -189,42 +224,87 @@
     }
   }
 
-  function usarInventario(lista, mensaje, tipo = "ok") {
+  async function cargarRestoInventarioEnSegundoPlano(primeraPagina, version) {
+    const filas = [...primeraPagina];
+    let offset = primeraPagina.length;
+
+    try {
+      while (offset < 100000) {
+        const pagina = await cargarPaginaPiezas(offset, REST_PAGE_SIZE);
+        if (version !== cargaInventarioVersion) return;
+        filas.push(...pagina);
+        offset += pagina.length;
+        if (pagina.length < REST_PAGE_SIZE) break;
+      }
+
+      const completos = reconciliarProductos(filas.map(normalizarProducto), productos);
+      usarInventario(completos, textoConteoPiezas(completos.length), "ok", { mantenerLimite: true });
+      programarGuardarCache();
+    } catch (error) {
+      console.warn("No se pudo completar el resto del inventario:", error);
+      if (version === cargaInventarioVersion) {
+        setStatus("El catálogo ya está disponible. Algunas piezas antiguas podrían tardar en incorporarse.", "");
+      }
+    }
+  }
+
+  function usarInventario(lista, mensaje, tipo = "ok", opciones = {}) {
     productos = lista;
     filtrados = productos;
-    piezasVisibles = PAGE_SIZE;
     actualizarTodosLosFiltros();
     actualizarStats(productos);
     actualizarSEO(productos);
-    filtrar();
+    filtrar({ mantenerLimite: Boolean(opciones.mantenerLimite) });
     setStatus(mensaje, tipo);
   }
 
-  async function cargarPiezasDesdeSupabaseREST() {
+  async function cargarPaginaPiezas(offset, limit) {
     validarConfigREST();
-    const resultado = [];
+    const url = restURL("piezas", {
+      select: "id,folio,pieza,marca,modelo,anio,color,lado,estado,precio,numero_parte,descripcion,disponible,created_at,vendido_en",
+      disponible: "eq.true",
+      vendido_en: "is.null",
+      order: "created_at.desc",
+      limit: String(limit),
+      offset: String(offset)
+    });
 
-    for (let offset = 0; offset < 100000; offset += REST_PAGE_SIZE) {
-      const url = restURL("piezas", {
-        select: "id,folio,pieza,marca,modelo,anio,color,lado,estado,precio,numero_parte,descripcion,disponible,created_at,vendido_en",
-        disponible: "eq.true",
-        vendido_en: "is.null",
-        order: "created_at.desc",
-        limit: String(REST_PAGE_SIZE),
-        offset: String(offset)
+    const pagina = await fetchJSON(url, API_TIMEOUT_MS);
+    if (!Array.isArray(pagina)) throw new Error("Respuesta inesperada del inventario.");
+    return pagina;
+  }
+
+  function reconciliarProductos(nuevos, anteriores = []) {
+    const previos = new Map(anteriores.map((p) => [p.uuid, p]));
+
+    return nuevos.map((nuevo) => {
+      const anterior = previos.get(nuevo.uuid);
+      if (!anterior) return nuevo;
+
+      const fotos = anterior.fotos?.length ? anterior.fotos : nuevo.fotos;
+      const fotoCount = Math.max(anterior.fotoCount || 0, nuevo.fotoCount || 0, fotos.length);
+      const fotosCargadas = Boolean(anterior.fotosCargadas || nuevo.fotosCargadas || fotos.length);
+      const fotosCompletas = Boolean(anterior.fotosCompletas || nuevo.fotosCompletas || fotos.length);
+      const fotosCargando = Boolean(anterior.fotosCargando);
+
+      Object.assign(anterior, nuevo, {
+        fotos,
+        fotoCount,
+        fotosCargadas,
+        fotosCompletas,
+        fotosCargando
       });
+      return anterior;
+    });
+  }
 
-      const pagina = await fetchJSON(url, API_TIMEOUT_MS);
-      if (!Array.isArray(pagina)) throw new Error("Respuesta inesperada del inventario.");
-      resultado.push(...pagina);
-      if (pagina.length < REST_PAGE_SIZE) break;
-    }
-
-    return resultado;
+  function fusionarConInventarioActual(primeros, actuales) {
+    const idsPrimeros = new Set(primeros.map((p) => p.uuid));
+    return primeros.concat(actuales.filter((p) => p.uuid && !idsPrimeros.has(p.uuid)));
   }
 
   async function cargarDatosJsonRespaldo() {
-    const response = await fetch(`datos.json?v=${Date.now()}`, { cache: "no-store" });
+    const response = await fetch("datos.json?v=1", { cache: "force-cache" });
     if (!response.ok) throw new Error("No se pudo leer datos.json");
     const data = await response.json();
     return Array.isArray(data) ? data : [];
@@ -617,7 +697,7 @@
     };
   }
 
-  function filtrar() {
+  function filtrar(opciones = {}) {
     const f = getFiltros();
     actualizarLinkPiezaNoEncontrada();
 
@@ -631,7 +711,8 @@
       return coincideBusqueda && coincidePieza && coincideMarca && coincideModelo && coincideAnio && coincideLado;
     });
 
-    piezasVisibles = PAGE_SIZE;
+    if (!opciones.mantenerLimite) piezasVisibles = PAGE_SIZE;
+    piezasVisibles = Math.max(PAGE_SIZE, piezasVisibles);
     actualizarControlesMoviles();
     mostrarProductos(filtrados);
   }
@@ -732,18 +813,9 @@
 
     if (total) total.textContent = lista.length;
     if (marcas) marcas.textContent = valoresUnicos(lista, "marca").length;
-    if (fotos) {
-      const conteoConocido = indiceFotosListo || lista.every((p) => p.fotosCargadas || (p.fotoCount || p.fotos.length) > 0);
-      if (conteoConocido) {
-        fotos.textContent = lista.filter((p) => (p.fotoCount || p.fotos.length) > 0).length;
-        fotos.classList.remove("stat-loading");
-      } else {
-        fotos.textContent = "Cargando";
-        fotos.classList.add("stat-loading");
-      }
-    }
+    if (fotos) fotos.textContent = "✓";
 
-    [total, marcas].forEach((el) => el?.classList.remove("stat-loading"));
+    [total, marcas, fotos].forEach((el) => el?.classList.remove("stat-loading"));
   }
 
   function mostrarProductos(lista) {
@@ -751,7 +823,6 @@
     const template = id("productTemplate");
     if (!grid || !template) return;
 
-    const version = ++renderVersion;
     const total = lista.length;
     const visibles = lista.slice(0, piezasVisibles);
     const contadorMovil = id("mobileCatalogCount");
@@ -774,8 +845,6 @@
       const node = template.content.cloneNode(true);
       const card = node.querySelector(".product-card");
       const photoBtn = node.querySelector(".product-photo");
-      const img = node.querySelector("img");
-      const count = node.querySelector(".photo-count");
       const title = node.querySelector("h3");
       const meta = node.querySelector(".meta");
       const details = node.querySelector(".details");
@@ -784,6 +853,7 @@
       const cartBtn = node.querySelector(".cart-btn");
       const matchReason = node.querySelector(".match-reason");
 
+      card.dataset.productUuid = producto.uuid || "";
       node.querySelector(".id-tag").textContent = `ID: ${producto.id || "N/A"}`;
       node.querySelector(".status-tag").textContent = producto.estado || "Disponible";
       title.textContent = tituloProducto(producto);
@@ -808,65 +878,69 @@
       });
       cartBtn.addEventListener("click", (event) => { event.stopPropagation(); agregarAlCarrito(producto); });
 
-      if (producto.fotos.length) {
-        const fotoPrincipal = producto.fotos[0];
-        img.alt = tituloProducto(producto);
-        img.loading = index === 0 ? "eager" : "lazy";
-        img.decoding = "async";
-        img.fetchPriority = index === 0 ? "high" : "low";
-        if (index === 0) img.src = fotoPrincipal;
-        else img.dataset.src = fotoPrincipal;
-        const cantidad = producto.fotoCount || producto.fotos.length;
-        count.textContent = cantidad > 1 ? `${cantidad} fotos` : "Ver foto";
-      } else {
-        img.remove();
-        count.textContent = producto.fotosCargando ? "Cargando foto" : "Sin foto";
-        photoBtn.classList.add("sin-foto");
-        photoBtn.insertAdjacentHTML("afterbegin", `<span>${producto.fotosCargando ? "Cargando foto" : "Sin foto"}</span>`);
-      }
-
+      pintarFotoTarjeta(card, producto, index);
       fragment.appendChild(card);
     });
 
     grid.appendChild(fragment);
-    activarCargaDiferidaImagenes(grid);
     actualizarBotonCargarMas(total, visibles.length);
     actualizarEstadoCatalogo(total, visibles.length);
 
     cargarFotosParaProductos(visibles).then((huboCambios) => {
-      if (huboCambios) {
-        actualizarStats(productos);
-        guardarCache(productos);
-        mostrarProductos(filtrados);
-      }
+      if (!huboCambios) return;
+      actualizarFotosTarjetas(filtrados.slice(0, piezasVisibles));
+      programarGuardarCache();
     }).catch((error) => console.warn("No se pudieron cargar fotos visibles:", error));
   }
 
-  function activarCargaDiferidaImagenes(contenedor) {
-    imageObserver?.disconnect();
-    const pendientes = [...contenedor.querySelectorAll("img[data-src]")];
-    if (!pendientes.length) return;
+  function pintarFotoTarjeta(card, producto, index) {
+    const photoBtn = card.querySelector(".product-photo");
+    const count = card.querySelector(".photo-count");
+    if (!photoBtn || !count) return;
 
-    const cargar = (img) => {
-      if (!img?.dataset.src) return;
-      img.src = img.dataset.src;
-      delete img.dataset.src;
-    };
+    let img = photoBtn.querySelector("img");
+    let placeholder = photoBtn.querySelector("[data-photo-placeholder]");
 
-    if (!("IntersectionObserver" in window)) {
-      pendientes.forEach(cargar);
+    if (producto.fotos.length) {
+      if (!img) {
+        img = document.createElement("img");
+        photoBtn.prepend(img);
+      }
+      placeholder?.remove();
+      photoBtn.classList.remove("sin-foto");
+      img.hidden = false;
+      img.alt = tituloProducto(producto);
+      img.loading = index === 0 ? "eager" : "lazy";
+      img.decoding = "async";
+      img.fetchPriority = index === 0 ? "high" : "low";
+      if (img.src !== producto.fotos[0]) img.src = producto.fotos[0];
+      const cantidad = producto.fotoCount || producto.fotos.length;
+      count.textContent = cantidad > 1 ? `${cantidad} fotos` : "Ver foto";
       return;
     }
 
-    imageObserver = new IntersectionObserver((entradas, observer) => {
-      entradas.forEach((entrada) => {
-        if (!entrada.isIntersecting) return;
-        cargar(entrada.target);
-        observer.unobserve(entrada.target);
-      });
-    }, { rootMargin: "220px 0px", threshold: 0.01 });
+    if (img) {
+      img.removeAttribute("src");
+      img.hidden = true;
+    }
+    if (!placeholder) {
+      placeholder = document.createElement("span");
+      placeholder.dataset.photoPlaceholder = "";
+      photoBtn.prepend(placeholder);
+    }
+    placeholder.textContent = producto.fotosCargando ? "Cargando foto" : "Sin foto";
+    count.textContent = producto.fotosCargando ? "Cargando foto" : "Sin foto";
+    photoBtn.classList.add("sin-foto");
+  }
 
-    pendientes.forEach((img) => imageObserver.observe(img));
+  function actualizarFotosTarjetas(lista) {
+    const grid = id("productsGrid");
+    if (!grid) return;
+    const mapa = new Map(lista.map((p) => [p.uuid, p]));
+    grid.querySelectorAll(".product-card[data-product-uuid]").forEach((card, index) => {
+      const producto = mapa.get(card.dataset.productUuid);
+      if (producto) pintarFotoTarjeta(card, producto, index);
+    });
   }
 
   function mostrarSinResultados(grid) {
@@ -958,38 +1032,6 @@
     return mapa;
   }
 
-  async function cargarIndiceFotosEnSegundoPlano() {
-    try {
-      validarConfigREST();
-      const conteos = new Map();
-
-      for (let offset = 0; offset < 100000; offset += REST_PAGE_SIZE) {
-        const url = restURL("fotos", {
-          select: "pieza_id",
-          limit: String(REST_PAGE_SIZE),
-          offset: String(offset)
-        });
-        const data = await fetchJSON(url, API_TIMEOUT_MS);
-        if (!Array.isArray(data)) break;
-        data.forEach((foto) => {
-          const piezaId = limpiar(foto.pieza_id);
-          if (piezaId) conteos.set(piezaId, (conteos.get(piezaId) || 0) + 1);
-        });
-        if (data.length < REST_PAGE_SIZE) break;
-      }
-
-      productos.forEach((p) => {
-        const total = conteos.get(p.uuid);
-        p.fotoCount = typeof total === "number" ? total : 0;
-      });
-      indiceFotosListo = true;
-      actualizarStats(productos);
-      guardarCache(productos);
-      mostrarProductos(filtrados);
-    } catch (error) {
-      console.warn("No se pudo cargar índice de fotos:", error);
-    }
-  }
 
   function partirEnLotes(lista, tamano) {
     const lotes = [];
@@ -1379,6 +1421,24 @@
       return cache.data;
     } catch {
       return null;
+    }
+  }
+
+  function programarGuardarCache() {
+    const ejecutar = () => {
+      cacheSaveTimer = null;
+      guardarCache(productos);
+    };
+
+    if (cacheSaveTimer) {
+      if (typeof window.cancelIdleCallback === "function") window.cancelIdleCallback(cacheSaveTimer);
+      else window.clearTimeout(cacheSaveTimer);
+    }
+
+    if (typeof window.requestIdleCallback === "function") {
+      cacheSaveTimer = window.requestIdleCallback(ejecutar, { timeout: 1800 });
+    } else {
+      cacheSaveTimer = window.setTimeout(ejecutar, 500);
     }
   }
 
