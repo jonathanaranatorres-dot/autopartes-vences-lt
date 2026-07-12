@@ -8,7 +8,6 @@
   const PAGE_SIZE = 12;
   const REST_PAGE_SIZE = 500;
   const PHOTO_BATCH_SIZE = 60;
-  const PORTADA_RECENT_WINDOW = 48;
   const SEARCH_DEBOUNCE_MS = 220;
   const API_TIMEOUT_MS = 14000;
   const PRODUCT_PAGE = "producto.html";
@@ -35,8 +34,6 @@
   let renderVersion = 0;
   let imageObserver = null;
   let indiceFotosListo = false;
-  let indiceFotosProgramado = false;
-  let productosPortada = [];
 
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => Array.from(document.querySelectorAll(selector));
@@ -170,10 +167,9 @@
     try {
       const data = await cargarPiezasDesdeSupabaseREST();
       usarInventario(data.map(normalizarProducto), textoConteoPiezas(data.length));
-      programarGuardarCache(productos);
-      // El conteo completo de fotos se hace cuando el navegador queda libre.
-      // Así no compite con la primera vista, los filtros ni las imágenes iniciales.
-      programarIndiceFotosEnSegundoPlano();
+      guardarCache(productos);
+      // Solo consulta los ID de foto para contar piezas con imágenes; no descarga las fotografías.
+      cargarIndiceFotosEnSegundoPlano();
     } catch (error) {
       console.warn("No se pudo cargar Supabase REST:", error);
       const cache = opciones.forzarRed ? null : leerCache();
@@ -195,7 +191,6 @@
 
   function usarInventario(lista, mensaje, tipo = "ok") {
     productos = lista;
-    productosPortada = construirPortadaVariada(productos, PAGE_SIZE);
     filtrados = productos;
     piezasVisibles = PAGE_SIZE;
     actualizarTodosLosFiltros();
@@ -293,7 +288,7 @@
       fotos,
       fotoCount: fotos.length,
       fotosCargadas: fotos.length > 0 || origen === "respaldo",
-      fotosCompletas: origen === "respaldo" || row.fotosCompletas === true,
+      fotosCompletas: fotos.length > 0 || origen === "respaldo",
       fotosCargando: false
     };
   }
@@ -641,99 +636,6 @@
     mostrarProductos(filtrados);
   }
 
-  function construirPortadaVariada(lista, limite = PAGE_SIZE) {
-    if (!Array.isArray(lista) || lista.length <= 1 || limite <= 0) return [...(lista || [])];
-
-    // La variedad se toma solo de publicaciones recientes. Así evitamos mandar
-    // a la primera pantalla piezas antiguas con fotos heredadas o enlaces lentos.
-    const candidatosRecientes = lista.slice(0, Math.max(limite, PORTADA_RECENT_WINDOW));
-    const masRecientePorTipo = new Map();
-    candidatosRecientes.forEach((producto) => {
-      const clave = claveVariedadProducto(producto);
-      if (!masRecientePorTipo.has(clave)) masRecientePorTipo.set(clave, producto);
-    });
-
-    // Orden estable durante todo el día: hay variedad, pero la portada no cambia
-    // cada vez que el cliente vuelve de una ficha o actualiza accidentalmente.
-    const ahora = new Date();
-    const semillaDia = `${ahora.getFullYear()}-${ahora.getMonth() + 1}-${ahora.getDate()}`;
-    const candidatos = [...masRecientePorTipo.values()].sort((a, b) => {
-      const pesoA = hashLigero(`${semillaDia}|${a.uuid || a.id || a.pieza}`);
-      const pesoB = hashLigero(`${semillaDia}|${b.uuid || b.id || b.pieza}`);
-      return pesoA - pesoB;
-    });
-
-    const seleccion = candidatos.slice(0, Math.min(limite, candidatos.length));
-    const seleccionados = new Set(seleccion);
-
-    // Si hay menos tipos que espacios, completamos con piezas recientes en su
-    // orden normal. No se revuelve ni se duplica el inventario.
-    if (seleccion.length < Math.min(limite, lista.length)) {
-      for (const producto of lista) {
-        if (seleccionados.has(producto)) continue;
-        seleccion.push(producto);
-        seleccionados.add(producto);
-        if (seleccion.length >= limite) break;
-      }
-    }
-
-    return seleccion;
-  }
-
-  function hashLigero(texto) {
-    let hash = 2166136261;
-    const valor = String(texto || "");
-    for (let i = 0; i < valor.length; i += 1) {
-      hash ^= valor.charCodeAt(i);
-      hash = Math.imul(hash, 16777619);
-    }
-    return hash >>> 0;
-  }
-
-  function claveVariedadProducto(producto) {
-    const texto = prepararTextoParaTokens(producto?.pieza || "");
-    const reglas = [
-      ["puerta", /\bpu+erta(?:s)?\b/],
-      ["compresor", /\bcompresor(?:es)?\b/],
-      ["alternador", /\balternador(?:es)?\b/],
-      ["marcha", /\bmarcha(?:s)?\b|motor de arranque/],
-      ["faro", /\bfaro(?:s)?\b|lampara delantera/],
-      ["calavera", /\bcalavera(?:s)?\b|\bstop(?:s)?\b/],
-      ["defensa", /\bdefensa(?:s)?\b|\bfacia(?:s)?\b|\bfascia(?:s)?\b|parachoque/],
-      ["espejo", /\bespejo(?:s)?\b|retrovisor/],
-      ["cofre", /\bcofre(?:s)?\b|\bcapot\b|\bcapo\b/],
-      ["salpicadera", /salpicadera|guardafango|lodera/],
-      ["rin-llanta", /\brin(?:es)?\b|\bllanta(?:s)?\b/],
-      ["radiador", /\bradiador(?:es)?\b/],
-      ["condensador", /\bcondensador(?:es)?\b/],
-      ["cajuela", /\bcajuela(?:s)?\b|tapa de cajuela/],
-      ["parrilla", /\bparrilla(?:s)?\b|rejilla frontal/],
-      ["modulo", /\bmodulo(?:s)?\b|computadora/],
-      ["motor", /\bmotor(?:es)?\b/],
-      ["transmision", /transmision|caja de velocidades/],
-      ["bomba", /\bbomba(?:s)?\b/],
-      ["tablero", /\btablero(?:s)?\b/],
-      ["asiento", /\basiento(?:s)?\b/],
-      ["arnes", /\barnes(?:es)?\b/],
-      ["sensor", /\bsensor(?:es)?\b/]
-    ];
-
-    const conocida = reglas.find(([, patron]) => patron.test(texto));
-    if (conocida) return conocida[0];
-
-    const tokens = tokenizarBusqueda(texto).filter((token) => !PALABRAS_RUIDO_BUSQUEDA.has(token));
-    return tokens.slice(0, 3).join("|") || `pieza:${normalizar(producto?.pieza || producto?.id || "sin-tipo")}`;
-  }
-
-  function ordenarCatalogoParaMostrar(lista) {
-    if (filtrosActivos() || !productosPortada.length || lista.length <= 1) return lista;
-
-    const disponibles = new Set(lista);
-    const portada = productosPortada.filter((producto) => disponibles.has(producto));
-    const destacados = new Set(portada);
-    return [...portada, ...lista.filter((producto) => !destacados.has(producto))];
-  }
-
   function productoIncluyeAnio(p, anio) {
     if (!anio) return true;
     const anios = extraerAnios(p.anio);
@@ -851,8 +753,7 @@
 
     const version = ++renderVersion;
     const total = lista.length;
-    const listaOrdenada = ordenarCatalogoParaMostrar(lista);
-    const visibles = listaOrdenada.slice(0, piezasVisibles);
+    const visibles = lista.slice(0, piezasVisibles);
     const contadorMovil = id("mobileCatalogCount");
     if (contadorMovil) contadorMovil.textContent = total === 1 ? "1 pieza encontrada" : `${total} piezas encontradas`;
 
@@ -896,7 +797,6 @@
         matchReason.hidden = !motivo;
       }
       card.style.setProperty("--card-index", String(index));
-      card.dataset.productKey = producto.uuid || producto.id;
 
       const productUrl = crearUrlProducto(producto);
       photoBtn.href = productUrl;
@@ -919,10 +819,10 @@
         const cantidad = producto.fotoCount || producto.fotos.length;
         count.textContent = cantidad > 1 ? `${cantidad} fotos` : "Ver foto";
       } else {
-        img.hidden = true;
+        img.remove();
         count.textContent = producto.fotosCargando ? "Cargando foto" : "Sin foto";
         photoBtn.classList.add("sin-foto");
-        photoBtn.insertAdjacentHTML("afterbegin", `<span class="photo-placeholder">${producto.fotosCargando ? "Cargando foto" : "Sin foto"}</span>`);
+        photoBtn.insertAdjacentHTML("afterbegin", `<span>${producto.fotosCargando ? "Cargando foto" : "Sin foto"}</span>`);
       }
 
       fragment.appendChild(card);
@@ -934,48 +834,12 @@
     actualizarEstadoCatalogo(total, visibles.length);
 
     cargarFotosParaProductos(visibles).then((huboCambios) => {
-      if (!huboCambios) return;
-      actualizarStats(productos);
-      programarGuardarCache(productos);
-      if (version === renderVersion) actualizarFotosVisibles(visibles, grid);
+      if (huboCambios) {
+        actualizarStats(productos);
+        guardarCache(productos);
+        mostrarProductos(filtrados);
+      }
     }).catch((error) => console.warn("No se pudieron cargar fotos visibles:", error));
-  }
-
-  function actualizarFotosVisibles(lista, grid) {
-    if (!grid) return;
-    const tarjetas = new Map(
-      [...grid.querySelectorAll(".product-card[data-product-key]")]
-        .map((card) => [card.dataset.productKey, card])
-    );
-
-    lista.forEach((producto, index) => {
-      if (!producto?.fotos?.length) return;
-      const clave = producto.uuid || producto.id;
-      const card = tarjetas.get(clave);
-      if (!card) return;
-
-      const photoBtn = card.querySelector(".product-photo");
-      const img = card.querySelector("img");
-      const count = card.querySelector(".photo-count");
-      if (!photoBtn || !img || !count) return;
-
-      photoBtn.classList.remove("sin-foto");
-      photoBtn.querySelector(".photo-placeholder")?.remove();
-      img.hidden = false;
-      img.alt = tituloProducto(producto);
-      img.loading = index === 0 ? "eager" : "lazy";
-      img.decoding = "async";
-      img.fetchPriority = index === 0 ? "high" : "low";
-      img.removeAttribute("src");
-      delete img.dataset.src;
-      if (index === 0) img.src = producto.fotos[0];
-      else img.dataset.src = producto.fotos[0];
-
-      const cantidad = producto.fotoCount || producto.fotos.length;
-      count.textContent = cantidad > 1 ? `${cantidad} fotos` : "Ver foto";
-    });
-
-    activarCargaDiferidaImagenes(grid);
   }
 
   function activarCargaDiferidaImagenes(contenedor) {
@@ -1053,8 +917,6 @@
     pendientes.forEach((p) => { p.fotosCargando = true; });
 
     try {
-      // Una sola consulta obtiene las URLs de las fotos de las piezas visibles.
-      // Solo la primera URL se coloca en la tarjeta; las demás no se descargan.
       const fotosPorPieza = await consultarFotosPorPiezas(pendientes.map((p) => p.uuid));
       pendientes.forEach((p) => {
         const fotos = fotosPorPieza.get(p.uuid) || [];
@@ -1096,27 +958,6 @@
     return mapa;
   }
 
-  function programarIndiceFotosEnSegundoPlano() {
-    if (indiceFotosProgramado || indiceFotosListo) return;
-    // En celular el contador global está oculto y esta consulta solo competiría
-    // con las imágenes. Se conserva únicamente en pantallas grandes.
-    if (window.matchMedia?.("(max-width: 768px)").matches) return;
-    indiceFotosProgramado = true;
-
-    window.setTimeout(() => {
-      const ejecutar = () => {
-        indiceFotosProgramado = false;
-        cargarIndiceFotosEnSegundoPlano();
-      };
-
-      if ("requestIdleCallback" in window) {
-        window.requestIdleCallback(ejecutar, { timeout: 4500 });
-      } else {
-        ejecutar();
-      }
-    }, 5500);
-  }
-
   async function cargarIndiceFotosEnSegundoPlano() {
     try {
       validarConfigREST();
@@ -1143,22 +984,11 @@
       });
       indiceFotosListo = true;
       actualizarStats(productos);
-      programarGuardarCache(productos);
-      actualizarEtiquetasFotosVisibles();
+      guardarCache(productos);
+      mostrarProductos(filtrados);
     } catch (error) {
       console.warn("No se pudo cargar índice de fotos:", error);
     }
-  }
-
-  function actualizarEtiquetasFotosVisibles() {
-    const porId = new Map(productos.map((p) => [p.uuid || p.id, p]));
-    document.querySelectorAll(".product-card[data-product-key]").forEach((card) => {
-      const producto = porId.get(card.dataset.productKey);
-      const etiqueta = card.querySelector(".photo-count");
-      if (!producto || !etiqueta || !producto.fotos.length) return;
-      const cantidad = producto.fotoCount || producto.fotos.length;
-      etiqueta.textContent = cantidad > 1 ? `${cantidad} fotos` : "Ver foto";
-    });
   }
 
   function partirEnLotes(lista, tamano) {
@@ -1550,30 +1380,6 @@
     } catch {
       return null;
     }
-  }
-
-  let guardarCacheTimer = null;
-  let guardarCacheIdleId = null;
-
-  function programarGuardarCache(lista) {
-    window.clearTimeout(guardarCacheTimer);
-    if (guardarCacheIdleId !== null && "cancelIdleCallback" in window) {
-      window.cancelIdleCallback(guardarCacheIdleId);
-      guardarCacheIdleId = null;
-    }
-
-    guardarCacheTimer = window.setTimeout(() => {
-      const ejecutar = () => {
-        guardarCacheIdleId = null;
-        guardarCache(lista);
-      };
-
-      if ("requestIdleCallback" in window) {
-        guardarCacheIdleId = window.requestIdleCallback(ejecutar, { timeout: 3000 });
-      } else {
-        ejecutar();
-      }
-    }, 900);
   }
 
   function guardarCache(lista) {
