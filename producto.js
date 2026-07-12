@@ -4,9 +4,11 @@
   const SUPABASE_URL = (cfg.SUPABASE_URL || "").replace(/\/$/, "");
   const SUPABASE_KEY = cfg.SUPABASE_ANON_KEY || "";
   const API_TIMEOUT_MS = 14000;
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
   let producto = null;
   let fotoActiva = 0;
+  let touchInicio = null;
 
   const id = (nombre) => document.getElementById(nombre);
   const limpiar = (valor) => String(valor ?? "").trim();
@@ -15,6 +17,8 @@
   document.addEventListener("DOMContentLoaded", iniciar);
 
   async function iniciar() {
+    conectarGaleria();
+
     const productoId = limpiar(new URLSearchParams(window.location.search).get("id"));
     if (!productoId) {
       mostrarError("No recibimos el ID de la pieza. Regresa al catálogo y abre una autoparte.");
@@ -34,32 +38,70 @@
     }
   }
 
+  function conectarGaleria() {
+    const galeria = id("productMainImage");
+    if (!galeria) return;
+
+    galeria.addEventListener("touchstart", (event) => {
+      const toque = event.changedTouches?.[0];
+      if (!toque) return;
+      touchInicio = { x: toque.clientX, y: toque.clientY };
+    }, { passive: true });
+
+    galeria.addEventListener("touchend", (event) => {
+      if (!touchInicio || !producto || producto.fotos.length < 2) return;
+      const toque = event.changedTouches?.[0];
+      if (!toque) return;
+
+      const dx = toque.clientX - touchInicio.x;
+      const dy = toque.clientY - touchInicio.y;
+      touchInicio = null;
+
+      if (Math.abs(dx) < 45 || Math.abs(dx) <= Math.abs(dy)) return;
+      cambiarFoto(dx < 0 ? 1 : -1);
+    }, { passive: true });
+
+    document.addEventListener("keydown", (event) => {
+      if (!producto || producto.fotos.length < 2) return;
+      if (event.key === "ArrowLeft") cambiarFoto(-1);
+      if (event.key === "ArrowRight") cambiarFoto(1);
+    });
+  }
+
   async function cargarProducto(productoId) {
-    const desdeSupabase = await cargarProductoSupabase(productoId).catch(() => null);
-    if (desdeSupabase) return desdeSupabase;
+    const configurado = SUPABASE_URL && SUPABASE_KEY && !SUPABASE_URL.includes("AQUI") && !SUPABASE_KEY.includes("AQUI");
+
+    if (configurado) {
+      try {
+        return await cargarProductoSupabase(productoId);
+      } catch (error) {
+        console.warn("Supabase no respondió; se intentará el respaldo local:", error);
+      }
+    }
+
     return await cargarProductoRespaldo(productoId);
   }
 
   async function cargarProductoSupabase(productoId) {
-    if (!SUPABASE_URL || !SUPABASE_KEY || SUPABASE_URL.includes("AQUI") || SUPABASE_KEY.includes("AQUI")) return null;
-
     const params = new URLSearchParams({
       select: "id,folio,pieza,marca,modelo,anio,color,lado,estado,precio,numero_parte,descripcion,disponible,vendido_en",
+      disponible: "eq.true",
+      vendido_en: "is.null",
       limit: "1"
     });
-    params.set("or", `(folio.eq.${productoId},id.eq.${productoId})`);
+
+    if (UUID_RE.test(productoId)) params.set("id", `eq.${productoId}`);
+    else params.set("folio", `eq.${productoId}`);
 
     const piezas = await fetchJSON(`${SUPABASE_URL}/rest/v1/piezas?${params.toString()}`);
     const row = Array.isArray(piezas) ? piezas[0] : null;
-    if (!row || row.disponible === false || row.vendido_en) return null;
+    if (!row) return null;
 
     const p = normalizarProducto(row, "supabase");
     if (p.uuid) {
       const fotos = await cargarFotosSupabase(p.uuid).catch(() => []);
-      if (fotos.length) {
-        p.fotos = fotos.map((foto) => prepararUrlFoto(foto.url)).filter(Boolean);
-        p.fotoCount = p.fotos.length;
-      }
+      p.fotos = fotos.map((foto) => prepararUrlFoto(foto.url)).filter(Boolean);
+      p.fotoCount = p.fotos.length;
     }
     return p;
   }
@@ -71,7 +113,7 @@
   }
 
   async function cargarProductoRespaldo(productoId) {
-    const response = await fetch(`datos.json?v=${Date.now()}`, { cache: "no-store" });
+    const response = await fetch("datos.json", { cache: "default" });
     if (!response.ok) return null;
     const data = await response.json();
     if (!Array.isArray(data)) return null;
@@ -88,7 +130,10 @@
         signal: controller.signal,
         headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
       });
-      if (!response.ok) throw new Error(`Error ${response.status}`);
+      if (!response.ok) {
+        const detalle = await response.text().catch(() => "");
+        throw new Error(`Error ${response.status}${detalle ? `: ${detalle}` : ""}`);
+      }
       return await response.json();
     } finally {
       window.clearTimeout(timer);
@@ -116,8 +161,18 @@
   }
 
   function fotosDesdeRow(row, origen) {
-    if (Array.isArray(row.fotos)) return row.fotos.filter((foto) => foto && foto.url).sort((a, b) => (a.orden || 0) - (b.orden || 0)).map((foto) => prepararUrlFoto(foto.url)).filter(Boolean);
-    if (origen === "respaldo") return [row.fotoPrincipal, row.foto2, row.foto3, row.foto4, row.foto5, row.foto6, row.link].map(prepararUrlFoto).filter(Boolean);
+    if (Array.isArray(row.fotos)) {
+      return row.fotos
+        .filter((foto) => foto && foto.url)
+        .sort((a, b) => (a.orden || 0) - (b.orden || 0))
+        .map((foto) => prepararUrlFoto(foto.url))
+        .filter(Boolean);
+    }
+    if (origen === "respaldo") {
+      return [row.fotoPrincipal, row.foto2, row.foto3, row.foto4, row.foto5, row.foto6, row.link]
+        .map(prepararUrlFoto)
+        .filter(Boolean);
+    }
     return [];
   }
 
@@ -132,13 +187,16 @@
   }
 
   function renderProducto(p) {
-    document.title = `${tituloProducto(p)} | AUTOPARTES VENCES`;
+    const titulo = tituloProducto(p);
+    const descripcionMeta = `${titulo} en AUTOPARTES VENCES. Confirma disponibilidad, compatibilidad y precio por WhatsApp.`;
+
+    document.title = `${titulo} | AUTOPARTES VENCES`;
     const meta = document.querySelector('meta[name="description"]');
-    if (meta) meta.content = `${tituloProducto(p)} en AUTOPARTES VENCES. Confirma disponibilidad, compatibilidad y precio por WhatsApp.`;
+    if (meta) meta.content = descripcionMeta;
 
     id("productId").textContent = `ID: ${p.id || "N/A"}`;
     id("productStatus").textContent = p.estado || "Disponible";
-    id("productTitle").textContent = tituloProducto(p);
+    id("productTitle").textContent = titulo;
     id("productMeta").textContent = [p.marca, p.modelo, p.anio].filter(Boolean).join(" · ") || "Autoparte disponible";
     id("productPrice").textContent = formatearPrecio(p.precio);
     id("productDescription").textContent = p.descripcion || "Sin descripción adicional. Te recomendamos confirmar compatibilidad por WhatsApp antes de cerrar la compra.";
@@ -147,7 +205,7 @@
 
     pintarFoto();
     pintarMiniaturas();
-    pintarSEO(p);
+    pintarSEO(p, descripcionMeta);
     id("productLoading").hidden = true;
     id("productContent").hidden = false;
   }
@@ -155,44 +213,92 @@
   function pintarFoto() {
     const wrap = id("productMainImage");
     if (!wrap || !producto) return;
-    if (producto.fotos.length) {
-      wrap.innerHTML = `<img src="${escaparAttr(producto.fotos[fotoActiva])}" alt="${escaparAttr(tituloProducto(producto))}" loading="eager" decoding="async">`;
-    } else {
+
+    const total = producto.fotos.length;
+    if (!total) {
       wrap.innerHTML = `<div class="empty"><h3>Sin foto publicada</h3><p>Pregunta por WhatsApp para confirmar fotos y estado.</p></div>`;
+      return;
     }
+
+    const multiples = total > 1;
+    wrap.innerHTML = `
+      <img src="${escaparAttr(producto.fotos[fotoActiva])}" alt="${escaparAttr(tituloProducto(producto))}. Foto ${fotoActiva + 1} de ${total}" loading="eager" decoding="async" fetchpriority="high">
+      <button class="product-gallery-arrow previous" type="button" data-gallery-prev aria-label="Foto anterior" ${multiples ? "" : "hidden"}>‹</button>
+      <button class="product-gallery-arrow next" type="button" data-gallery-next aria-label="Foto siguiente" ${multiples ? "" : "hidden"}>›</button>
+      <span class="product-gallery-count" aria-live="polite">${fotoActiva + 1} / ${total}</span>`;
+
+    wrap.querySelector("[data-gallery-prev]")?.addEventListener("click", () => cambiarFoto(-1));
+    wrap.querySelector("[data-gallery-next]")?.addEventListener("click", () => cambiarFoto(1));
   }
 
   function pintarMiniaturas() {
     const cont = id("productThumbs");
     if (!cont || !producto) return;
     cont.innerHTML = "";
+
     producto.fotos.forEach((url, index) => {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = index === fotoActiva ? "activo" : "";
-      btn.innerHTML = `<img src="${escaparAttr(url)}" alt="Foto ${index + 1}" loading="lazy" decoding="async">`;
-      btn.addEventListener("click", () => { fotoActiva = index; pintarFoto(); pintarMiniaturas(); });
+      btn.setAttribute("aria-label", `Ver foto ${index + 1}`);
+      btn.innerHTML = `<img src="${escaparAttr(url)}" alt="Miniatura ${index + 1}" loading="lazy" decoding="async">`;
+      btn.addEventListener("click", () => {
+        fotoActiva = index;
+        pintarFoto();
+        pintarMiniaturas();
+      });
       cont.appendChild(btn);
     });
+
+    cont.querySelector("button.activo")?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
   }
 
-  function pintarSEO(p) {
+  function cambiarFoto(delta) {
+    if (!producto || producto.fotos.length < 2) return;
+    fotoActiva = (fotoActiva + delta + producto.fotos.length) % producto.fotos.length;
+    pintarFoto();
+    pintarMiniaturas();
+  }
+
+  function pintarSEO(p, descripcionMeta) {
+    const titulo = tituloProducto(p);
+    const imagen = p.fotos[0] || "https://www.autopartesvences.com/imagenes/og-autopartes-vences.png";
+    const canonicalUrl = new URL(window.location.pathname, window.location.origin);
+    canonicalUrl.searchParams.set("id", p.id || p.uuid || "");
+    const url = canonicalUrl.toString();
+
+    const canonical = document.querySelector('link[rel="canonical"]');
+    if (canonical) canonical.href = url;
+
+    actualizarMeta('meta[property="og:title"]', `${titulo} | AUTOPARTES VENCES`);
+    actualizarMeta('meta[property="og:description"]', descripcionMeta);
+    actualizarMeta('meta[property="og:url"]', url);
+    actualizarMeta('meta[property="og:image"]', imagen);
+    actualizarMeta('meta[name="twitter:title"]', `${titulo} | AUTOPARTES VENCES`);
+    actualizarMeta('meta[name="twitter:description"]', descripcionMeta);
+    actualizarMeta('meta[name="twitter:image"]', imagen);
+
     id("productJsonLd").textContent = JSON.stringify({
       "@context": "https://schema.org",
       "@type": "Product",
-      name: tituloProducto(p),
+      name: titulo,
       sku: p.id || undefined,
       brand: p.marca ? { "@type": "Brand", name: p.marca } : undefined,
-      image: p.fotos[0] || "https://www.autopartesvences.com/imagenes/logo-vences.jpeg",
-      description: p.descripcion || `Autoparte usada original ${tituloProducto(p)} disponible en AUTOPARTES VENCES.`,
+      image: p.fotos.length ? p.fotos : [imagen],
+      description: p.descripcion || `Autoparte usada original ${titulo} disponible en AUTOPARTES VENCES.`,
       offers: {
         "@type": "Offer",
         priceCurrency: "MXN",
         availability: "https://schema.org/InStock",
-        url: window.location.href,
+        url,
         price: Number(p.precio || 0) || undefined
       }
     });
+  }
+
+  function actualizarMeta(selector, contenido) {
+    const meta = document.querySelector(selector);
+    if (meta && contenido) meta.setAttribute("content", contenido);
   }
 
   function mostrarError(mensaje) {
@@ -263,5 +369,8 @@
   function escapar(texto) {
     return String(texto ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
   }
-  function escaparAttr(texto) { return escapar(texto).replaceAll("`", "&#096;"); }
+
+  function escaparAttr(texto) {
+    return escapar(texto).replaceAll("`", "&#096;");
+  }
 })();
