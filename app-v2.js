@@ -8,6 +8,7 @@
   const PAGE_SIZE = 12;
   const REST_PAGE_SIZE = 500;
   const PHOTO_BATCH_SIZE = 60;
+  const PORTADA_RECENT_WINDOW = 48;
   const SEARCH_DEBOUNCE_MS = 220;
   const API_TIMEOUT_MS = 14000;
   const PRODUCT_PAGE = "producto.html";
@@ -34,9 +35,8 @@
   let renderVersion = 0;
   let imageObserver = null;
   let indiceFotosListo = false;
-  let productosPortada = [];
-  let cacheGuardadoPendiente = false;
   let indiceFotosProgramado = false;
+  let productosPortada = [];
 
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => Array.from(document.querySelectorAll(selector));
@@ -170,8 +170,9 @@
     try {
       const data = await cargarPiezasDesdeSupabaseREST();
       usarInventario(data.map(normalizarProducto), textoConteoPiezas(data.length));
-      programarGuardadoCache(productos);
-      // El conteo completo de fotos se difiere para no competir con las primeras imágenes visibles.
+      programarGuardarCache(productos);
+      // El conteo completo de fotos se hace cuando el navegador queda libre.
+      // Así no compite con la primera vista, los filtros ni las imágenes iniciales.
       programarIndiceFotosEnSegundoPlano();
     } catch (error) {
       console.warn("No se pudo cargar Supabase REST:", error);
@@ -292,7 +293,7 @@
       fotos,
       fotoCount: fotos.length,
       fotosCargadas: fotos.length > 0 || origen === "respaldo",
-      fotosCompletas: fotos.length > 0 || origen === "respaldo",
+      fotosCompletas: origen === "respaldo" || row.fotosCompletas === true,
       fotosCargando: false
     };
   }
@@ -643,30 +644,50 @@
   function construirPortadaVariada(lista, limite = PAGE_SIZE) {
     if (!Array.isArray(lista) || lista.length <= 1 || limite <= 0) return [...(lista || [])];
 
-    const grupos = new Map();
-    lista.forEach((producto) => {
+    // La variedad se toma solo de publicaciones recientes. Así evitamos mandar
+    // a la primera pantalla piezas antiguas con fotos heredadas o enlaces lentos.
+    const candidatosRecientes = lista.slice(0, Math.max(limite, PORTADA_RECENT_WINDOW));
+    const masRecientePorTipo = new Map();
+    candidatosRecientes.forEach((producto) => {
       const clave = claveVariedadProducto(producto);
-      if (!grupos.has(clave)) grupos.set(clave, []);
-      grupos.get(clave).push(producto);
+      if (!masRecientePorTipo.has(clave)) masRecientePorTipo.set(clave, producto);
     });
 
-    const seleccion = [];
-    const seleccionados = new Set();
-    const gruposMezclados = barajarCopia([...grupos.values()]);
-
-    gruposMezclados.forEach((grupo) => {
-      if (seleccion.length >= limite || !grupo.length) return;
-      const candidato = grupo[Math.floor(Math.random() * grupo.length)];
-      seleccion.push(candidato);
-      seleccionados.add(candidato);
+    // Orden estable durante todo el día: hay variedad, pero la portada no cambia
+    // cada vez que el cliente vuelve de una ficha o actualiza accidentalmente.
+    const ahora = new Date();
+    const semillaDia = `${ahora.getFullYear()}-${ahora.getMonth() + 1}-${ahora.getDate()}`;
+    const candidatos = [...masRecientePorTipo.values()].sort((a, b) => {
+      const pesoA = hashLigero(`${semillaDia}|${a.uuid || a.id || a.pieza}`);
+      const pesoB = hashLigero(`${semillaDia}|${b.uuid || b.id || b.pieza}`);
+      return pesoA - pesoB;
     });
 
+    const seleccion = candidatos.slice(0, Math.min(limite, candidatos.length));
+    const seleccionados = new Set(seleccion);
+
+    // Si hay menos tipos que espacios, completamos con piezas recientes en su
+    // orden normal. No se revuelve ni se duplica el inventario.
     if (seleccion.length < Math.min(limite, lista.length)) {
-      const restantes = barajarCopia(lista.filter((producto) => !seleccionados.has(producto)));
-      seleccion.push(...restantes.slice(0, limite - seleccion.length));
+      for (const producto of lista) {
+        if (seleccionados.has(producto)) continue;
+        seleccion.push(producto);
+        seleccionados.add(producto);
+        if (seleccion.length >= limite) break;
+      }
     }
 
     return seleccion;
+  }
+
+  function hashLigero(texto) {
+    let hash = 2166136261;
+    const valor = String(texto || "");
+    for (let i = 0; i < valor.length; i += 1) {
+      hash ^= valor.charCodeAt(i);
+      hash = Math.imul(hash, 16777619);
+    }
+    return hash >>> 0;
   }
 
   function claveVariedadProducto(producto) {
@@ -702,15 +723,6 @@
 
     const tokens = tokenizarBusqueda(texto).filter((token) => !PALABRAS_RUIDO_BUSQUEDA.has(token));
     return tokens.slice(0, 3).join("|") || `pieza:${normalizar(producto?.pieza || producto?.id || "sin-tipo")}`;
-  }
-
-  function barajarCopia(lista) {
-    const copia = [...lista];
-    for (let i = copia.length - 1; i > 0; i -= 1) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [copia[i], copia[j]] = [copia[j], copia[i]];
-    }
-    return copia;
   }
 
   function ordenarCatalogoParaMostrar(lista) {
@@ -884,7 +896,7 @@
         matchReason.hidden = !motivo;
       }
       card.style.setProperty("--card-index", String(index));
-      card.dataset.productKey = producto.uuid || producto.id || String(index);
+      card.dataset.productKey = producto.uuid || producto.id;
 
       const productUrl = crearUrlProducto(producto);
       photoBtn.href = productUrl;
@@ -908,9 +920,9 @@
         count.textContent = cantidad > 1 ? `${cantidad} fotos` : "Ver foto";
       } else {
         img.hidden = true;
-        count.textContent = producto.fotosCargadas ? "Sin foto" : "Cargando foto";
+        count.textContent = producto.fotosCargando ? "Cargando foto" : "Sin foto";
         photoBtn.classList.add("sin-foto");
-        photoBtn.insertAdjacentHTML("afterbegin", `<span class="photo-placeholder">${producto.fotosCargadas ? "Sin foto" : "Cargando foto"}</span>`);
+        photoBtn.insertAdjacentHTML("afterbegin", `<span class="photo-placeholder">${producto.fotosCargando ? "Cargando foto" : "Sin foto"}</span>`);
       }
 
       fragment.appendChild(card);
@@ -922,52 +934,45 @@
     actualizarEstadoCatalogo(total, visibles.length);
 
     cargarFotosParaProductos(visibles).then((huboCambios) => {
-      if (!huboCambios || version !== renderVersion) return;
-      actualizarFotosVisiblesEnDOM(visibles, grid);
+      if (!huboCambios) return;
       actualizarStats(productos);
-      programarGuardadoCache(productos);
+      programarGuardarCache(productos);
+      if (version === renderVersion) actualizarFotosVisibles(visibles, grid);
     }).catch((error) => console.warn("No se pudieron cargar fotos visibles:", error));
   }
 
-  function actualizarFotosVisiblesEnDOM(lista, grid) {
-    if (!grid?.isConnected) return;
-    const tarjetas = new Map([...grid.querySelectorAll(".product-card[data-product-key]")].map((card) => [card.dataset.productKey, card]));
+  function actualizarFotosVisibles(lista, grid) {
+    if (!grid) return;
+    const tarjetas = new Map(
+      [...grid.querySelectorAll(".product-card[data-product-key]")]
+        .map((card) => [card.dataset.productKey, card])
+    );
 
     lista.forEach((producto, index) => {
-      const clave = producto.uuid || producto.id || String(index);
+      if (!producto?.fotos?.length) return;
+      const clave = producto.uuid || producto.id;
       const card = tarjetas.get(clave);
       if (!card) return;
 
       const photoBtn = card.querySelector(".product-photo");
+      const img = card.querySelector("img");
       const count = card.querySelector(".photo-count");
-      let img = card.querySelector("img");
-      photoBtn?.querySelector(".photo-placeholder")?.remove();
+      if (!photoBtn || !img || !count) return;
 
-      if (!photoBtn || !count) return;
+      photoBtn.classList.remove("sin-foto");
+      photoBtn.querySelector(".photo-placeholder")?.remove();
+      img.hidden = false;
+      img.alt = tituloProducto(producto);
+      img.loading = index === 0 ? "eager" : "lazy";
+      img.decoding = "async";
+      img.fetchPriority = index === 0 ? "high" : "low";
+      img.removeAttribute("src");
+      delete img.dataset.src;
+      if (index === 0) img.src = producto.fotos[0];
+      else img.dataset.src = producto.fotos[0];
 
-      if (producto.fotos.length) {
-        photoBtn.classList.remove("sin-foto");
-        if (!img) {
-          img = document.createElement("img");
-          photoBtn.prepend(img);
-        }
-        img.hidden = false;
-        img.alt = tituloProducto(producto);
-        img.loading = index === 0 ? "eager" : "lazy";
-        img.decoding = "async";
-        img.fetchPriority = index === 0 ? "high" : "low";
-        img.removeAttribute("src");
-        delete img.dataset.src;
-        if (index === 0) img.src = producto.fotos[0];
-        else img.dataset.src = producto.fotos[0];
-        const cantidad = producto.fotoCount || producto.fotos.length;
-        count.textContent = cantidad > 1 ? `${cantidad} fotos` : "Ver foto";
-      } else {
-        if (img) img.hidden = true;
-        photoBtn.classList.add("sin-foto");
-        photoBtn.insertAdjacentHTML("afterbegin", '<span class="photo-placeholder">Sin foto</span>');
-        count.textContent = "Sin foto";
-      }
+      const cantidad = producto.fotoCount || producto.fotos.length;
+      count.textContent = cantidad > 1 ? `${cantidad} fotos` : "Ver foto";
     });
 
     activarCargaDiferidaImagenes(grid);
@@ -1048,6 +1053,8 @@
     pendientes.forEach((p) => { p.fotosCargando = true; });
 
     try {
+      // Una sola consulta obtiene las URLs de las fotos de las piezas visibles.
+      // Solo la primera URL se coloca en la tarjeta; las demás no se descargan.
       const fotosPorPieza = await consultarFotosPorPiezas(pendientes.map((p) => p.uuid));
       pendientes.forEach((p) => {
         const fotos = fotosPorPieza.get(p.uuid) || [];
@@ -1090,15 +1097,24 @@
   }
 
   function programarIndiceFotosEnSegundoPlano() {
-    if (indiceFotosProgramado || window.matchMedia("(max-width: 768px)").matches) return;
+    if (indiceFotosProgramado || indiceFotosListo) return;
+    // En celular el contador global está oculto y esta consulta solo competiría
+    // con las imágenes. Se conserva únicamente en pantallas grandes.
+    if (window.matchMedia?.("(max-width: 768px)").matches) return;
     indiceFotosProgramado = true;
 
-    const ejecutar = () => cargarIndiceFotosEnSegundoPlano();
-    if ("requestIdleCallback" in window) {
-      window.requestIdleCallback(ejecutar, { timeout: 10000 });
-    } else {
-      window.setTimeout(ejecutar, 7000);
-    }
+    window.setTimeout(() => {
+      const ejecutar = () => {
+        indiceFotosProgramado = false;
+        cargarIndiceFotosEnSegundoPlano();
+      };
+
+      if ("requestIdleCallback" in window) {
+        window.requestIdleCallback(ejecutar, { timeout: 4500 });
+      } else {
+        ejecutar();
+      }
+    }, 5500);
   }
 
   async function cargarIndiceFotosEnSegundoPlano() {
@@ -1127,10 +1143,22 @@
       });
       indiceFotosListo = true;
       actualizarStats(productos);
-      programarGuardadoCache(productos);
+      programarGuardarCache(productos);
+      actualizarEtiquetasFotosVisibles();
     } catch (error) {
       console.warn("No se pudo cargar índice de fotos:", error);
     }
+  }
+
+  function actualizarEtiquetasFotosVisibles() {
+    const porId = new Map(productos.map((p) => [p.uuid || p.id, p]));
+    document.querySelectorAll(".product-card[data-product-key]").forEach((card) => {
+      const producto = porId.get(card.dataset.productKey);
+      const etiqueta = card.querySelector(".photo-count");
+      if (!producto || !etiqueta || !producto.fotos.length) return;
+      const cantidad = producto.fotoCount || producto.fotos.length;
+      etiqueta.textContent = cantidad > 1 ? `${cantidad} fotos` : "Ver foto";
+    });
   }
 
   function partirEnLotes(lista, tamano) {
@@ -1524,20 +1552,28 @@
     }
   }
 
-  function programarGuardadoCache(lista) {
-    if (cacheGuardadoPendiente) return;
-    cacheGuardadoPendiente = true;
+  let guardarCacheTimer = null;
+  let guardarCacheIdleId = null;
 
-    const ejecutar = () => {
-      cacheGuardadoPendiente = false;
-      guardarCache(lista);
-    };
-
-    if ("requestIdleCallback" in window) {
-      window.requestIdleCallback(ejecutar, { timeout: 4000 });
-    } else {
-      window.setTimeout(ejecutar, 500);
+  function programarGuardarCache(lista) {
+    window.clearTimeout(guardarCacheTimer);
+    if (guardarCacheIdleId !== null && "cancelIdleCallback" in window) {
+      window.cancelIdleCallback(guardarCacheIdleId);
+      guardarCacheIdleId = null;
     }
+
+    guardarCacheTimer = window.setTimeout(() => {
+      const ejecutar = () => {
+        guardarCacheIdleId = null;
+        guardarCache(lista);
+      };
+
+      if ("requestIdleCallback" in window) {
+        guardarCacheIdleId = window.requestIdleCallback(ejecutar, { timeout: 3000 });
+      } else {
+        ejecutar();
+      }
+    }, 900);
   }
 
   function guardarCache(lista) {
