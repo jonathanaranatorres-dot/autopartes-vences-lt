@@ -65,7 +65,7 @@
   }
   </script>
 
-  <link rel="stylesheet" href="style-v2.css?v=8" />
+  <link rel="stylesheet" href="style-v2.css?v=9" />
 </head>
 <body>
   <header class="top-strip">
@@ -112,7 +112,7 @@
           <div class="hero-stats" aria-label="Estadísticas del catálogo">
             <div><strong id="statTotal" class="stat-loading">Cargando</strong><span>Piezas disponibles</span></div>
             <div><strong id="statMarcas" class="stat-loading">Cargando</strong><span>Marcas cargadas</span></div>
-            <div><strong id="statConFotos" class="stat-loading">Cargando</strong><span>Con fotos reales</span></div>
+            <div><strong id="statConFotos" class="stat-loading">Cargando</strong><span>Con precio publicado</span></div>
           </div>
         </div>
         <div class="hero-panel">
@@ -366,12 +366,12 @@
   </aside>
 
   <template id="productTemplate">
-    <article class="product-card" tabindex="0">
+    <article class="product-card">
       <div class="product-ribbon">Disponible</div>
-      <button class="product-photo" type="button">
+      <a class="product-photo" href="" aria-label="Abrir ficha de la autoparte">
         <img alt="" loading="lazy" />
         <span class="photo-count"></span>
-      </button>
+      </a>
       <div class="product-body">
         <div class="product-topline">
           <span class="tag id-tag"></span>
@@ -384,7 +384,7 @@
         <div class="price-row">
           <strong class="price"></strong>
           <div class="card-actions">
-            <button class="btn small view-btn" type="button">Ver detalles</button>
+            <a class="btn small view-btn" href="">Ver detalles</a>
             <button class="btn small cart-btn" type="button">Preguntar</button>
           </div>
         </div>
@@ -402,7 +402,7 @@
   </noscript>
 
   <script src="supabase-config.js?v=4" defer></script>
-  <script src="app-v2.js?v=16" defer></script>
+  <script src="app-v2.js?v=17" defer></script>
 </body>
 </html>
 
