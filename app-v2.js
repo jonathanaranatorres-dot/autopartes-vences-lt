@@ -33,6 +33,7 @@
   let filtroTimer = null;
   let renderVersion = 0;
   let imageObserver = null;
+  let indiceFotosListo = false;
 
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => Array.from(document.querySelectorAll(selector));
@@ -119,13 +120,15 @@
   }
 
   async function cargarInventario(opciones = {}) {
+    indiceFotosListo = false;
     setStatus("Cargando piezas disponibles...", "");
 
     try {
       const data = await cargarPiezasDesdeSupabaseREST();
       usarInventario(data.map(normalizarProducto), textoConteoPiezas(data.length));
       guardarCache(productos);
-      // Las fotos se solicitan solo para las piezas visibles; evita descargar todo el índice al abrir la página.
+      // Solo consulta los ID de foto para contar piezas con imágenes; no descarga las fotografías.
+      cargarIndiceFotosEnSegundoPlano();
     } catch (error) {
       console.warn("No se pudo cargar Supabase REST:", error);
       const cache = opciones.forzarRed ? null : leerCache();
@@ -687,9 +690,18 @@
 
     if (total) total.textContent = lista.length;
     if (marcas) marcas.textContent = valoresUnicos(lista, "marca").length;
-    if (fotos) fotos.textContent = lista.filter((p) => Number(p.precio || 0) > 0).length;
+    if (fotos) {
+      const conteoConocido = indiceFotosListo || lista.every((p) => p.fotosCargadas || (p.fotoCount || p.fotos.length) > 0);
+      if (conteoConocido) {
+        fotos.textContent = lista.filter((p) => (p.fotoCount || p.fotos.length) > 0).length;
+        fotos.classList.remove("stat-loading");
+      } else {
+        fotos.textContent = "Cargando";
+        fotos.classList.add("stat-loading");
+      }
+    }
 
-    [total, marcas, fotos].forEach((el) => el?.classList.remove("stat-loading"));
+    [total, marcas].forEach((el) => el?.classList.remove("stat-loading"));
   }
 
   function mostrarProductos(lista) {
@@ -924,9 +936,11 @@
 
       productos.forEach((p) => {
         const total = conteos.get(p.uuid);
-        if (typeof total === "number") p.fotoCount = total;
+        p.fotoCount = typeof total === "number" ? total : 0;
       });
+      indiceFotosListo = true;
       actualizarStats(productos);
+      guardarCache(productos);
       mostrarProductos(filtrados);
     } catch (error) {
       console.warn("No se pudo cargar índice de fotos:", error);
