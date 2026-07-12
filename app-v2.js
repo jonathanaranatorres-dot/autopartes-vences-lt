@@ -35,6 +35,8 @@
   let imageObserver = null;
   let indiceFotosListo = false;
   let productosPortada = [];
+  let cacheGuardadoPendiente = false;
+  let indiceFotosProgramado = false;
 
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => Array.from(document.querySelectorAll(selector));
@@ -168,9 +170,9 @@
     try {
       const data = await cargarPiezasDesdeSupabaseREST();
       usarInventario(data.map(normalizarProducto), textoConteoPiezas(data.length));
-      guardarCache(productos);
-      // Solo consulta los ID de foto para contar piezas con imágenes; no descarga las fotografías.
-      cargarIndiceFotosEnSegundoPlano();
+      programarGuardadoCache(productos);
+      // El conteo completo de fotos se difiere para no competir con las primeras imágenes visibles.
+      programarIndiceFotosEnSegundoPlano();
     } catch (error) {
       console.warn("No se pudo cargar Supabase REST:", error);
       const cache = opciones.forzarRed ? null : leerCache();
@@ -882,6 +884,7 @@
         matchReason.hidden = !motivo;
       }
       card.style.setProperty("--card-index", String(index));
+      card.dataset.productKey = producto.uuid || producto.id || String(index);
 
       const productUrl = crearUrlProducto(producto);
       photoBtn.href = productUrl;
@@ -904,10 +907,10 @@
         const cantidad = producto.fotoCount || producto.fotos.length;
         count.textContent = cantidad > 1 ? `${cantidad} fotos` : "Ver foto";
       } else {
-        img.remove();
-        count.textContent = producto.fotosCargando ? "Cargando foto" : "Sin foto";
+        img.hidden = true;
+        count.textContent = producto.fotosCargadas ? "Sin foto" : "Cargando foto";
         photoBtn.classList.add("sin-foto");
-        photoBtn.insertAdjacentHTML("afterbegin", `<span>${producto.fotosCargando ? "Cargando foto" : "Sin foto"}</span>`);
+        photoBtn.insertAdjacentHTML("afterbegin", `<span class="photo-placeholder">${producto.fotosCargadas ? "Sin foto" : "Cargando foto"}</span>`);
       }
 
       fragment.appendChild(card);
@@ -919,12 +922,55 @@
     actualizarEstadoCatalogo(total, visibles.length);
 
     cargarFotosParaProductos(visibles).then((huboCambios) => {
-      if (huboCambios) {
-        actualizarStats(productos);
-        guardarCache(productos);
-        mostrarProductos(filtrados);
-      }
+      if (!huboCambios || version !== renderVersion) return;
+      actualizarFotosVisiblesEnDOM(visibles, grid);
+      actualizarStats(productos);
+      programarGuardadoCache(productos);
     }).catch((error) => console.warn("No se pudieron cargar fotos visibles:", error));
+  }
+
+  function actualizarFotosVisiblesEnDOM(lista, grid) {
+    if (!grid?.isConnected) return;
+    const tarjetas = new Map([...grid.querySelectorAll(".product-card[data-product-key]")].map((card) => [card.dataset.productKey, card]));
+
+    lista.forEach((producto, index) => {
+      const clave = producto.uuid || producto.id || String(index);
+      const card = tarjetas.get(clave);
+      if (!card) return;
+
+      const photoBtn = card.querySelector(".product-photo");
+      const count = card.querySelector(".photo-count");
+      let img = card.querySelector("img");
+      photoBtn?.querySelector(".photo-placeholder")?.remove();
+
+      if (!photoBtn || !count) return;
+
+      if (producto.fotos.length) {
+        photoBtn.classList.remove("sin-foto");
+        if (!img) {
+          img = document.createElement("img");
+          photoBtn.prepend(img);
+        }
+        img.hidden = false;
+        img.alt = tituloProducto(producto);
+        img.loading = index === 0 ? "eager" : "lazy";
+        img.decoding = "async";
+        img.fetchPriority = index === 0 ? "high" : "low";
+        img.removeAttribute("src");
+        delete img.dataset.src;
+        if (index === 0) img.src = producto.fotos[0];
+        else img.dataset.src = producto.fotos[0];
+        const cantidad = producto.fotoCount || producto.fotos.length;
+        count.textContent = cantidad > 1 ? `${cantidad} fotos` : "Ver foto";
+      } else {
+        if (img) img.hidden = true;
+        photoBtn.classList.add("sin-foto");
+        photoBtn.insertAdjacentHTML("afterbegin", '<span class="photo-placeholder">Sin foto</span>');
+        count.textContent = "Sin foto";
+      }
+    });
+
+    activarCargaDiferidaImagenes(grid);
   }
 
   function activarCargaDiferidaImagenes(contenedor) {
@@ -1043,6 +1089,18 @@
     return mapa;
   }
 
+  function programarIndiceFotosEnSegundoPlano() {
+    if (indiceFotosProgramado || window.matchMedia("(max-width: 768px)").matches) return;
+    indiceFotosProgramado = true;
+
+    const ejecutar = () => cargarIndiceFotosEnSegundoPlano();
+    if ("requestIdleCallback" in window) {
+      window.requestIdleCallback(ejecutar, { timeout: 10000 });
+    } else {
+      window.setTimeout(ejecutar, 7000);
+    }
+  }
+
   async function cargarIndiceFotosEnSegundoPlano() {
     try {
       validarConfigREST();
@@ -1069,8 +1127,7 @@
       });
       indiceFotosListo = true;
       actualizarStats(productos);
-      guardarCache(productos);
-      mostrarProductos(filtrados);
+      programarGuardadoCache(productos);
     } catch (error) {
       console.warn("No se pudo cargar índice de fotos:", error);
     }
@@ -1464,6 +1521,22 @@
       return cache.data;
     } catch {
       return null;
+    }
+  }
+
+  function programarGuardadoCache(lista) {
+    if (cacheGuardadoPendiente) return;
+    cacheGuardadoPendiente = true;
+
+    const ejecutar = () => {
+      cacheGuardadoPendiente = false;
+      guardarCache(lista);
+    };
+
+    if ("requestIdleCallback" in window) {
+      window.requestIdleCallback(ejecutar, { timeout: 4000 });
+    } else {
+      window.setTimeout(ejecutar, 500);
     }
   }
 
