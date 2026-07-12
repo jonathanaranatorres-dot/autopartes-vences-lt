@@ -207,6 +207,7 @@
     pintarMiniaturas();
     pintarSEO(p, descripcionMeta);
     id("productLoading").hidden = true;
+    id("productError").hidden = true;
     id("productContent").hidden = false;
   }
 
@@ -303,6 +304,7 @@
 
   function mostrarError(mensaje) {
     id("productLoading").hidden = true;
+    id("productContent").hidden = true;
     const error = id("productError");
     error.hidden = false;
     error.querySelector("p").textContent = mensaje;
