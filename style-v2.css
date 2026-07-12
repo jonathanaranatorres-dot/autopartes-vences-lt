@@ -1329,7 +1329,8 @@ body::after {
 .empty-suggestions button { padding: 8px 11px; font-size: 13px; }
 .product-body .meta { margin-bottom: 6px; }
 .product-card .cart-btn { background: linear-gradient(135deg, var(--yellow), #f59e0b); color: #111827; border-color: transparent; }
-.product-card .view-btn { background: #111827; color: white; border-color: #111827; }
+.product-card .view-btn { background: #111827; color: white; border-color: #111827; text-decoration: none; }
+.product-card .product-photo { text-decoration: none; }
 .product-card .details dd { line-height: 1.2; }
 .product-page-main {
   min-height: 100vh;
@@ -1351,16 +1352,54 @@ body::after {
   overflow: hidden;
 }
 .product-page-main-image {
+  position: relative;
   width: 100%;
   min-height: 420px;
   background: #020617;
   display: grid;
   place-items: center;
+  overflow: hidden;
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
 }
 .product-page-main-image img {
+  display: block;
   width: 100%;
   max-height: 620px;
   object-fit: contain;
+}
+.product-gallery-arrow {
+  position: absolute;
+  top: 50%;
+  z-index: 2;
+  width: 46px;
+  height: 46px;
+  border: 1px solid rgba(255,255,255,.24);
+  border-radius: 999px;
+  background: rgba(2,6,23,.72);
+  color: white;
+  font-size: 34px;
+  line-height: 1;
+  cursor: pointer;
+  transform: translateY(-50%);
+  backdrop-filter: blur(8px);
+}
+.product-gallery-arrow:hover { background: rgba(15,23,42,.94); }
+.product-gallery-arrow.previous { left: 12px; }
+.product-gallery-arrow.next { right: 12px; }
+.product-gallery-count {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 2;
+  padding: 7px 11px;
+  border-radius: 999px;
+  background: rgba(2,6,23,.78);
+  color: white;
+  font-size: 13px;
+  font-weight: 950;
+  backdrop-filter: blur(8px);
 }
 .product-page-thumbs {
   display: flex;
@@ -1391,4 +1430,7 @@ body::after {
   .smart-suggestions { align-items: flex-start; }
   .product-page-card { grid-template-columns: 1fr; }
   .product-page-main-image { min-height: 300px; }
+  .product-gallery-arrow { width: 42px; height: 42px; font-size: 30px; }
+  .product-gallery-arrow.previous { left: 8px; }
+  .product-gallery-arrow.next { right: 8px; }
 }
