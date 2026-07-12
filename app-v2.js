@@ -34,6 +34,7 @@
   let renderVersion = 0;
   let imageObserver = null;
   let indiceFotosListo = false;
+  let productosPortada = [];
 
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => Array.from(document.querySelectorAll(selector));
@@ -191,6 +192,7 @@
 
   function usarInventario(lista, mensaje, tipo = "ok") {
     productos = lista;
+    productosPortada = construirPortadaVariada(productos, PAGE_SIZE);
     filtrados = productos;
     piezasVisibles = PAGE_SIZE;
     actualizarTodosLosFiltros();
@@ -636,6 +638,88 @@
     mostrarProductos(filtrados);
   }
 
+  function construirPortadaVariada(lista, limite = PAGE_SIZE) {
+    if (!Array.isArray(lista) || lista.length <= 1 || limite <= 0) return [...(lista || [])];
+
+    const grupos = new Map();
+    lista.forEach((producto) => {
+      const clave = claveVariedadProducto(producto);
+      if (!grupos.has(clave)) grupos.set(clave, []);
+      grupos.get(clave).push(producto);
+    });
+
+    const seleccion = [];
+    const seleccionados = new Set();
+    const gruposMezclados = barajarCopia([...grupos.values()]);
+
+    gruposMezclados.forEach((grupo) => {
+      if (seleccion.length >= limite || !grupo.length) return;
+      const candidato = grupo[Math.floor(Math.random() * grupo.length)];
+      seleccion.push(candidato);
+      seleccionados.add(candidato);
+    });
+
+    if (seleccion.length < Math.min(limite, lista.length)) {
+      const restantes = barajarCopia(lista.filter((producto) => !seleccionados.has(producto)));
+      seleccion.push(...restantes.slice(0, limite - seleccion.length));
+    }
+
+    return seleccion;
+  }
+
+  function claveVariedadProducto(producto) {
+    const texto = prepararTextoParaTokens(producto?.pieza || "");
+    const reglas = [
+      ["puerta", /\bpu+erta(?:s)?\b/],
+      ["compresor", /\bcompresor(?:es)?\b/],
+      ["alternador", /\balternador(?:es)?\b/],
+      ["marcha", /\bmarcha(?:s)?\b|motor de arranque/],
+      ["faro", /\bfaro(?:s)?\b|lampara delantera/],
+      ["calavera", /\bcalavera(?:s)?\b|\bstop(?:s)?\b/],
+      ["defensa", /\bdefensa(?:s)?\b|\bfacia(?:s)?\b|\bfascia(?:s)?\b|parachoque/],
+      ["espejo", /\bespejo(?:s)?\b|retrovisor/],
+      ["cofre", /\bcofre(?:s)?\b|\bcapot\b|\bcapo\b/],
+      ["salpicadera", /salpicadera|guardafango|lodera/],
+      ["rin-llanta", /\brin(?:es)?\b|\bllanta(?:s)?\b/],
+      ["radiador", /\bradiador(?:es)?\b/],
+      ["condensador", /\bcondensador(?:es)?\b/],
+      ["cajuela", /\bcajuela(?:s)?\b|tapa de cajuela/],
+      ["parrilla", /\bparrilla(?:s)?\b|rejilla frontal/],
+      ["modulo", /\bmodulo(?:s)?\b|computadora/],
+      ["motor", /\bmotor(?:es)?\b/],
+      ["transmision", /transmision|caja de velocidades/],
+      ["bomba", /\bbomba(?:s)?\b/],
+      ["tablero", /\btablero(?:s)?\b/],
+      ["asiento", /\basiento(?:s)?\b/],
+      ["arnes", /\barnes(?:es)?\b/],
+      ["sensor", /\bsensor(?:es)?\b/]
+    ];
+
+    const conocida = reglas.find(([, patron]) => patron.test(texto));
+    if (conocida) return conocida[0];
+
+    const tokens = tokenizarBusqueda(texto).filter((token) => !PALABRAS_RUIDO_BUSQUEDA.has(token));
+    return tokens.slice(0, 3).join("|") || `pieza:${normalizar(producto?.pieza || producto?.id || "sin-tipo")}`;
+  }
+
+  function barajarCopia(lista) {
+    const copia = [...lista];
+    for (let i = copia.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [copia[i], copia[j]] = [copia[j], copia[i]];
+    }
+    return copia;
+  }
+
+  function ordenarCatalogoParaMostrar(lista) {
+    if (filtrosActivos() || !productosPortada.length || lista.length <= 1) return lista;
+
+    const disponibles = new Set(lista);
+    const portada = productosPortada.filter((producto) => disponibles.has(producto));
+    const destacados = new Set(portada);
+    return [...portada, ...lista.filter((producto) => !destacados.has(producto))];
+  }
+
   function productoIncluyeAnio(p, anio) {
     if (!anio) return true;
     const anios = extraerAnios(p.anio);
@@ -753,7 +837,8 @@
 
     const version = ++renderVersion;
     const total = lista.length;
-    const visibles = lista.slice(0, piezasVisibles);
+    const listaOrdenada = ordenarCatalogoParaMostrar(lista);
+    const visibles = listaOrdenada.slice(0, piezasVisibles);
     const contadorMovil = id("mobileCatalogCount");
     if (contadorMovil) contadorMovil.textContent = total === 1 ? "1 pieza encontrada" : `${total} piezas encontradas`;
 
