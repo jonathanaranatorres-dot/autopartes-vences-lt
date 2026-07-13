@@ -1694,3 +1694,61 @@ body::after {
     transform: translateY(12px);
   }
 }
+
+/* AUTOPARTES VENCES · Rendimiento móvil v9 */
+@media (max-width: 720px) {
+  body::after,
+  .top-strip::before,
+  .hero::before,
+  .hero::after,
+  .panel-glow,
+  #proceso::before {
+    animation: none !important;
+    filter: none !important;
+  }
+
+  body::after { display: none; }
+
+  .brand img,
+  .brand span,
+  .nav-links a,
+  .nav-cart,
+  .btn {
+    will-change: auto;
+  }
+
+  .product-card,
+  .hero-copy > *,
+  .hero-card,
+  .detail-modal.open .detail-card,
+  .cart-panel.open .cart-drawer,
+  .whatsapp-float {
+    animation: none !important;
+  }
+
+  .product-card,
+  .filters,
+  #proceso .process-grid article,
+  .modal-backdrop,
+  .cart-backdrop,
+  .product-gallery-count {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  .product-photo img,
+  .product-card:hover .product-photo img {
+    transition: none;
+    transform: none;
+    filter: none;
+  }
+
+  #ventajas,
+  #proceso,
+  .payments,
+  .local-trust,
+  .footer {
+    content-visibility: auto;
+    contain-intrinsic-size: 700px;
+  }
+}
