@@ -3,7 +3,7 @@
   const WHATSAPP = cfg.WHATSAPP_NUMBER || "525632753982";
   const SUPABASE_URL = (cfg.SUPABASE_URL || "").replace(/\/$/, "");
   const SUPABASE_KEY = cfg.SUPABASE_ANON_KEY || "";
-  const API_TIMEOUT_MS = 14000;
+  const API_TIMEOUT_MS = 7000;
   const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
   let producto = null;
@@ -100,14 +100,19 @@
     const p = normalizarProducto(row, "supabase");
     if (p.uuid) {
       const fotos = await cargarFotosSupabase(p.uuid).catch(() => []);
-      p.fotos = fotos.map((foto) => prepararUrlFoto(foto.url)).filter(Boolean);
+      p.fotos = fotos
+        .map((foto) => prepararUrlFoto(urlPublicaStorage(foto.storage_path) || foto.url, 1400))
+        .filter(Boolean);
+      p.miniaturas = fotos
+        .map((foto) => prepararUrlFoto(foto.url || urlPublicaStorage(foto.storage_path), 520))
+        .filter(Boolean);
       p.fotoCount = p.fotos.length;
     }
     return p;
   }
 
   async function cargarFotosSupabase(uuid) {
-    const params = new URLSearchParams({ select: "url,orden", pieza_id: `eq.${uuid}`, order: "orden.asc" });
+    const params = new URLSearchParams({ select: "url,storage_path,orden", pieza_id: `eq.${uuid}`, order: "orden.asc" });
     const fotos = await fetchJSON(`${SUPABASE_URL}/rest/v1/fotos?${params.toString()}`);
     return Array.isArray(fotos) ? fotos : [];
   }
@@ -143,6 +148,7 @@
   function normalizarProducto(row, origen = "supabase") {
     const uuid = limpiar(row.uuid || row.id || "");
     const folio = limpiar(row.folio || row.id || "");
+    const medios = mediosDesdeRow(row, origen);
     return {
       uuid,
       id: folio || uuid,
@@ -156,33 +162,56 @@
       precio: row.precio ?? row.Precio,
       numeroParte: limpiar(row.numero_parte || row.numeroParte || row["numero parte"] || row["No. Parte"]),
       descripcion: limpiar(row.descripcion || row.notas || row.Notas || row.descripcionSeo),
-      fotos: fotosDesdeRow(row, origen)
+      fotos: medios.fotos,
+      miniaturas: medios.miniaturas
     };
   }
 
-  function fotosDesdeRow(row, origen) {
+  function mediosDesdeRow(row, origen) {
     if (Array.isArray(row.fotos)) {
-      return row.fotos
-        .filter((foto) => foto && foto.url)
-        .sort((a, b) => (a.orden || 0) - (b.orden || 0))
-        .map((foto) => prepararUrlFoto(foto.url))
-        .filter(Boolean);
+      const ordenadas = row.fotos
+        .filter((foto) => foto && (foto.url || foto.storage_path || foto.urlCompleta))
+        .sort((a, b) => (a.orden || 0) - (b.orden || 0));
+      return {
+        fotos: ordenadas
+          .map((foto) => prepararUrlFoto(foto.urlCompleta || urlPublicaStorage(foto.storage_path) || foto.url, 1400))
+          .filter(Boolean),
+        miniaturas: ordenadas
+          .map((foto) => prepararUrlFoto(foto.miniatura || foto.url || urlPublicaStorage(foto.storage_path), 520))
+          .filter(Boolean)
+      };
     }
     if (origen === "respaldo") {
-      return [row.fotoPrincipal, row.foto2, row.foto3, row.foto4, row.foto5, row.foto6, row.link]
-        .map(prepararUrlFoto)
-        .filter(Boolean);
+      const urls = [row.fotoPrincipal, row.foto2, row.foto3, row.foto4, row.foto5, row.foto6, row.link].filter(esUrlFotoValida);
+      return {
+        fotos: urls.map((url) => prepararUrlFoto(url, 1400)).filter(Boolean),
+        miniaturas: urls.map((url) => prepararUrlFoto(url, 520)).filter(Boolean)
+      };
     }
-    return [];
+    return { fotos: [], miniaturas: [] };
   }
 
-  function prepararUrlFoto(url) {
+  function urlPublicaStorage(storagePath) {
+    const path = limpiar(storagePath).replace(/^\/+/, "");
+    const bucket = limpiar(cfg.STORAGE_BUCKET || "fotos-piezas");
+    if (!path || !SUPABASE_URL || !bucket) return "";
+    return `${SUPABASE_URL}/storage/v1/object/public/${encodeURIComponent(bucket)}/${path.split("/").map(encodeURIComponent).join("/")}`;
+  }
+
+  function esUrlFotoValida(url) {
+    const texto = limpiar(url);
+    if (!texto) return false;
+    if (/drive\.google\.com\/(?:drive\/)?folders\//i.test(texto)) return false;
+    return true;
+  }
+
+  function prepararUrlFoto(url, anchoDrive = 1200) {
     const texto = limpiar(url);
     if (!texto) return "";
     const driveFile = texto.match(/drive\.google\.com\/file\/d\/([^/]+)/i);
-    if (driveFile?.[1]) return `https://drive.google.com/thumbnail?id=${encodeURIComponent(driveFile[1])}&sz=w1400`;
+    if (driveFile?.[1]) return `https://drive.google.com/thumbnail?id=${encodeURIComponent(driveFile[1])}&sz=w${anchoDrive}`;
     const driveOpen = texto.match(/[?&]id=([^&]+)/i);
-    if (texto.includes("drive.google.com") && driveOpen?.[1]) return `https://drive.google.com/thumbnail?id=${encodeURIComponent(driveOpen[1])}&sz=w1400`;
+    if (texto.includes("drive.google.com") && driveOpen?.[1]) return `https://drive.google.com/thumbnail?id=${encodeURIComponent(driveOpen[1])}&sz=w${anchoDrive}`;
     return texto;
   }
 
@@ -242,7 +271,8 @@
       btn.type = "button";
       btn.className = index === fotoActiva ? "activo" : "";
       btn.setAttribute("aria-label", `Ver foto ${index + 1}`);
-      btn.innerHTML = `<img src="${escaparAttr(url)}" alt="Miniatura ${index + 1}" loading="lazy" decoding="async">`;
+      const miniatura = producto.miniaturas?.[index] || url;
+      btn.innerHTML = `<img src="${escaparAttr(miniatura)}" alt="Miniatura ${index + 1}" loading="lazy" decoding="async">`;
       btn.addEventListener("click", () => {
         fotoActiva = index;
         pintarFoto();
