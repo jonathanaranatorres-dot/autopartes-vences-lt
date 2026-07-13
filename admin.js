@@ -1196,9 +1196,10 @@ async function eliminarPieza(p) {
 
   setStatus("tableStatus", "Eliminando pieza...");
 
-  const paths = (p.fotos || []).map((f) => f.storage_path).filter(Boolean);
+  const paths = [...new Set((p.fotos || []).flatMap(pathsFotoStorage).filter(Boolean))];
   if (paths.length) {
-    await avDB.storage.from(bucket).remove(paths);
+    const { error: storageError } = await avDB.storage.from(bucket).remove(paths);
+    if (storageError) console.warn("No se pudieron borrar todos los archivos de foto:", storageError.message);
   }
 
   const { error } = await avDB.from("piezas").delete().eq("id", p.id);
@@ -1277,7 +1278,7 @@ async function guardarFotosTrabajo(piezaId) {
     setStatus("formStatus", `Eliminando ${fotosEliminadas.length} foto(s)...`);
 
     const ids = fotosEliminadas.map((foto) => foto.id).filter(Boolean);
-    const paths = fotosEliminadas.map((foto) => foto.storage_path).filter(Boolean);
+    const paths = [...new Set(fotosEliminadas.flatMap(pathsFotoStorage).filter(Boolean))];
 
     if (paths.length) {
       const { error: storageError } = await avDB.storage.from(bucket).remove(paths);
@@ -1318,69 +1319,229 @@ async function guardarFotosTrabajo(piezaId) {
 }
 
 async function subirFotoNueva(piezaId, file, orden) {
-  const archivoWeb = await optimizarImagenParaWeb(file);
-  const extension = archivoWeb.name.includes(".") ? archivoWeb.name.split(".").pop().toLowerCase() : "jpg";
+  const nombreBase = (file?.name || "autoparte").replace(/\.[^.]+$/, "") || "autoparte";
   const sello = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const path = `${piezaId}/${sello}-${orden + 1}-${slug(archivoWeb.name)}.${extension}`;
+  const basePath = `${sello}-${orden + 1}-${slug(nombreBase)}`;
 
-  const { error: uploadError } = await avDB.storage
-    .from(bucket)
-    .upload(path, archivoWeb, {
-      cacheControl: "31536000",
-      upsert: false,
-      contentType: archivoWeb.type || "image/jpeg"
-    });
-
-  if (uploadError) throw uploadError;
-
-  const { data: publicData } = avDB.storage.from(bucket).getPublicUrl(path);
-  const url = publicData.publicUrl;
-
-  const { error: insertFotoError } = await avDB.from("fotos").insert({
-    pieza_id: piezaId,
-    url,
-    storage_path: path,
-    orden
+  const archivoCompleto = await crearVersionImagen(file, {
+    maxLado: 1400,
+    calidadInicial: 0.76,
+    tamanoObjetivoKb: 550,
+    sufijo: "web"
+  });
+  const miniatura = await crearVersionImagen(file, {
+    maxLado: 560,
+    calidadInicial: 0.68,
+    tamanoObjetivoKb: 120,
+    sufijo: "mini"
   });
 
-  if (insertFotoError) throw insertFotoError;
-}
-
-
-async function optimizarImagenParaWeb(file) {
-  const tiposOptimizables = new Set(["image/jpeg", "image/jpg", "image/webp"]);
-  if (!file || !tiposOptimizables.has(String(file.type || "").toLowerCase())) return file;
-
-  const MAX_LADO = 1600;
-  const CALIDAD = 0.82;
+  const extensionCompleta = extensionArchivo(archivoCompleto);
+  const extensionMiniatura = extensionArchivo(miniatura);
+  const pathCompleto = `${piezaId}/full/${basePath}.${extensionCompleta}`;
+  const pathMiniatura = `${piezaId}/thumbs/${basePath}.${extensionMiniatura}`;
 
   try {
-    const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
-    const escala = Math.min(1, MAX_LADO / Math.max(bitmap.width, bitmap.height));
+    await subirArchivoStorage(pathCompleto, archivoCompleto, false);
+    await subirArchivoStorage(pathMiniatura, miniatura, false);
 
-    if (escala === 1 && file.size <= 900 * 1024) {
-      bitmap.close?.();
-      return file;
+    const { data: publicData } = avDB.storage.from(bucket).getPublicUrl(pathMiniatura);
+    const urlMiniatura = publicData.publicUrl;
+
+    const { error: insertFotoError } = await avDB.from("fotos").insert({
+      pieza_id: piezaId,
+      url: urlMiniatura,
+      storage_path: pathCompleto,
+      orden
+    });
+
+    if (insertFotoError) throw insertFotoError;
+  } catch (error) {
+    await avDB.storage.from(bucket).remove([pathCompleto, pathMiniatura]).catch(() => {});
+    throw error;
+  }
+}
+
+async function subirArchivoStorage(path, file, upsert = false) {
+  const { error } = await avDB.storage
+    .from(bucket)
+    .upload(path, file, {
+      cacheControl: "31536000",
+      upsert,
+      contentType: file.type || "image/webp"
+    });
+  if (error) throw error;
+}
+
+function extensionArchivo(file) {
+  const tipo = String(file?.type || "").toLowerCase();
+  if (tipo.includes("webp")) return "webp";
+  if (tipo.includes("png")) return "png";
+  if (tipo.includes("jpeg") || tipo.includes("jpg")) return "jpg";
+  const nombre = String(file?.name || "").split("?")[0];
+  const ext = nombre.includes(".") ? nombre.split(".").pop().toLowerCase() : "";
+  return ["webp", "png", "jpg", "jpeg"].includes(ext) ? (ext === "jpeg" ? "jpg" : ext) : "webp";
+}
+
+async function crearVersionImagen(file, opciones = {}) {
+  if (!file) throw new Error("No se recibió la fotografía.");
+
+  const maxLado = Number(opciones.maxLado || 1400);
+  const calidadInicial = Number(opciones.calidadInicial || 0.76);
+  const objetivoBytes = Number(opciones.tamanoObjetivoKb || 550) * 1024;
+  const sufijo = opciones.sufijo || "web";
+  let bitmap;
+
+  try {
+    bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
+  } catch (error) {
+    const tipo = String(file.type || "").toLowerCase();
+    if (tipo.includes("heic") || tipo.includes("heif")) {
+      throw new Error("La foto está en formato HEIC. En el iPhone usa Cámara > Formatos > Más compatible y vuelve a seleccionarla.");
     }
+    throw new Error(`No se pudo leer la imagen ${file.name || "seleccionada"}.`);
+  }
 
+  try {
+    const escala = Math.min(1, maxLado / Math.max(bitmap.width, bitmap.height));
     const canvas = document.createElement("canvas");
     canvas.width = Math.max(1, Math.round(bitmap.width * escala));
     canvas.height = Math.max(1, Math.round(bitmap.height * escala));
     const ctx = canvas.getContext("2d", { alpha: false });
+    if (!ctx) throw new Error("El navegador no pudo preparar la fotografía.");
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-    bitmap.close?.();
 
-    const tipoSalida = file.type === "image/webp" ? "image/webp" : "image/jpeg";
-    const blob = await new Promise((resolve) => canvas.toBlob(resolve, tipoSalida, CALIDAD));
-    if (!blob || blob.size >= file.size) return file;
+    let tipoSalida = "image/webp";
+    let calidad = calidadInicial;
+    let blob = await canvasABlob(canvas, tipoSalida, calidad);
 
-    const base = file.name.replace(/\.[^.]+$/, "") || "autoparte";
+    if (!blob || !["image/webp", "image/jpeg"].includes(blob.type)) {
+      tipoSalida = "image/jpeg";
+      blob = await canvasABlob(canvas, tipoSalida, calidad);
+    }
+    if (!blob) throw new Error("No se pudo comprimir la fotografía.");
+    tipoSalida = blob.type || tipoSalida;
+
+    while (blob.size > objetivoBytes && calidad > 0.46) {
+      calidad = Math.max(0.46, calidad - 0.07);
+      const siguiente = await canvasABlob(canvas, tipoSalida, calidad);
+      if (!siguiente || siguiente.size >= blob.size) break;
+      blob = siguiente;
+    }
+
+    const base = String(file.name || "autoparte").replace(/\.[^.]+$/, "") || "autoparte";
     const extension = tipoSalida === "image/webp" ? "webp" : "jpg";
-    return new File([blob], `${base}.${extension}`, { type: tipoSalida, lastModified: Date.now() });
-  } catch (error) {
-    console.warn("No se pudo optimizar una foto; se subirá el archivo original:", error);
-    return file;
+    return new File([blob], `${base}-${sufijo}.${extension}`, {
+      type: tipoSalida,
+      lastModified: Date.now()
+    });
+  } finally {
+    bitmap.close?.();
   }
+}
+
+function canvasABlob(canvas, tipo, calidad) {
+  return new Promise((resolve) => canvas.toBlob(resolve, tipo, calidad));
+}
+
+function storagePathDesdeUrl(url) {
+  const texto = String(url || "").trim();
+  if (!texto) return "";
+  try {
+    const pathname = new URL(texto).pathname;
+    const marcador = `/storage/v1/object/public/${bucket}/`;
+    const indice = pathname.indexOf(marcador);
+    if (indice < 0) return "";
+    return pathname.slice(indice + marcador.length).split("/").map(decodeURIComponent).join("/");
+  } catch (_) {
+    return "";
+  }
+}
+
+function pathsFotoStorage(foto) {
+  const paths = [];
+  if (foto?.storage_path) paths.push(foto.storage_path);
+  const pathUrl = storagePathDesdeUrl(foto?.url);
+  if (pathUrl && !paths.includes(pathUrl)) paths.push(pathUrl);
+  return paths;
+}
+
+function pathMiniaturaDesdeOriginal(storagePath, extension = "webp") {
+  const limpio = String(storagePath || "").replace(/^\/+/, "");
+  if (!limpio) return "";
+  const partes = limpio.split("/");
+  const archivo = partes.pop() || "foto";
+  if (partes.at(-1) === "full") partes.pop();
+  const base = archivo.replace(/\.[^.]+$/, "") || "foto";
+  const ext = ["webp", "jpg", "png"].includes(extension) ? extension : "webp";
+  return [...partes, "thumbs", `${base}.${ext}`].join("/");
+}
+
+function fotoYaTieneMiniatura(foto) {
+  return storagePathDesdeUrl(foto?.url).split("/").includes("thumbs");
+}
+
+async function optimizarFotosExistentes() {
+  if (!esAdminActual()) {
+    setStatus("tableStatus", "Solo un administrador puede optimizar las fotos existentes.", "err");
+    return;
+  }
+
+  const pendientes = piezas
+    .flatMap((pieza) => (pieza.fotos || []).map((foto) => ({ ...foto, pieza_id: pieza.id })))
+    .filter((foto) => foto.id && foto.storage_path && !fotoYaTieneMiniatura(foto));
+
+  if (!pendientes.length) {
+    setStatus("tableStatus", "Todas las fotos de Supabase ya tienen miniatura ligera.", "ok");
+    return;
+  }
+
+  const confirmar = confirm(`Se crearán miniaturas ligeras para ${pendientes.length} foto(s). Las fotos grandes se conservarán para el detalle y las descargas. ¿Continuar?`);
+  if (!confirmar) return;
+
+  const boton = $("optimizeExistingPhotos");
+  if (boton) boton.disabled = true;
+  let correctas = 0;
+  let fallidas = 0;
+
+  for (let index = 0; index < pendientes.length; index++) {
+    const foto = pendientes[index];
+    setStatus("tableStatus", `Optimizando foto ${index + 1} de ${pendientes.length}...`);
+
+    try {
+      const { data: blob, error: downloadError } = await avDB.storage.from(bucket).download(foto.storage_path);
+      if (downloadError) throw downloadError;
+
+      const nombre = foto.storage_path.split("/").pop() || `foto-${index + 1}.jpg`;
+      const archivo = new File([blob], nombre, { type: blob.type || "image/jpeg" });
+      const miniatura = await crearVersionImagen(archivo, {
+        maxLado: 560,
+        calidadInicial: 0.68,
+        tamanoObjetivoKb: 120,
+        sufijo: "mini"
+      });
+      const pathMiniatura = pathMiniaturaDesdeOriginal(foto.storage_path, extensionArchivo(miniatura));
+      await subirArchivoStorage(pathMiniatura, miniatura, true);
+      const { data: publicData } = avDB.storage.from(bucket).getPublicUrl(pathMiniatura);
+
+      const { error: updateError } = await avDB
+        .from("fotos")
+        .update({ url: publicData.publicUrl })
+        .eq("id", foto.id);
+      if (updateError) throw updateError;
+      correctas += 1;
+    } catch (error) {
+      fallidas += 1;
+      console.warn(`No se pudo optimizar la foto ${foto.id}:`, error);
+    }
+  }
+
+  if (boton) boton.disabled = false;
+  await cargarPiezas();
+  const tipo = fallidas ? "" : "ok";
+  setStatus("tableStatus", `Optimización terminada: ${correctas} miniatura(s) creadas${fallidas ? ` y ${fallidas} pendiente(s)` : ""}.`, tipo);
 }
 
 function resetFotosTrabajo() {
@@ -1803,6 +1964,7 @@ function registrarEventos() {
   $("resetBtn").addEventListener("click", () => limpiarFormulario({ preservarVehiculo: false }));
   $("excelInput").addEventListener("change", importarExcel);
   $("exportExcel").addEventListener("click", exportarExcel);
+  $("optimizeExistingPhotos")?.addEventListener("click", optimizarFotosExistentes);
   $("exportMonthlyCut")?.addEventListener("click", exportarCorteMensual);
   $("clearTrainingSales")?.addEventListener("click", limpiarVentasCapacitacion);
   $("preview").addEventListener("click", manejarAccionPreview);
