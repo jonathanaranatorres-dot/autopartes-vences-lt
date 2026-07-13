@@ -4,13 +4,15 @@
   const SUPABASE_URL = (cfg.SUPABASE_URL || "").replace(/\/$/, "");
   const SUPABASE_KEY = cfg.SUPABASE_ANON_KEY || "";
   const CART_KEY = "carritoAutopartesVencesV2";
-  const CACHE_KEY = "avCatalogoPublicoCacheV3";
+  const CACHE_KEY = "avCatalogoPublicoCacheV4";
   const PAGE_SIZE = 12;
-  const INITIAL_BATCH_SIZE = 60;
-  const REST_PAGE_SIZE = 1000;
-  const PHOTO_BATCH_SIZE = 60;
+  const INITIAL_BATCH_SIZE = 24;
+  const REST_PAGE_SIZE = 250;
+  const PHOTO_BATCH_SIZE = 24;
   const SEARCH_DEBOUNCE_MS = 220;
-  const API_TIMEOUT_MS = 14000;
+  const API_TIMEOUT_MS = 7000;
+  const PHOTO_TIMEOUT_MS = 6500;
+  const INITIAL_NETWORK_GRACE_MS = 2200;
   const PRODUCT_PAGE = "producto.html";
   const BUSQUEDAS_RAPIDAS = [
     ["faro", "Faros"],
@@ -34,6 +36,7 @@
   let filtroTimer = null;
   let cargaInventarioVersion = 0;
   let cacheSaveTimer = null;
+  let mostrandoRespaldoLocal = false;
 
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => Array.from(document.querySelectorAll(selector));
@@ -166,6 +169,7 @@
     const cache = opciones.forzarRed ? null : leerCache();
 
     if (!mantenerActual && cache?.length) {
+      mostrandoRespaldoLocal = false;
       usarInventario(
         cache.map((row) => normalizarProducto(row, "cache")),
         "Mostrando inventario guardado mientras comprobamos novedades.",
@@ -174,54 +178,103 @@
     } else if (mantenerActual) {
       setStatus("Actualizando inventario sin ocultar las piezas actuales...", "");
     } else {
-      setStatus("Cargando piezas disponibles...", "");
+      setStatus("Abriendo catálogo...", "");
     }
 
+    const promesaRed = cargarPaginaPiezas(0, INITIAL_BATCH_SIZE);
+    const promesaRespaldo = !productos.length
+      ? cargarDatosJsonRespaldo().catch((error) => {
+          console.warn("No se pudo preparar el respaldo local:", error);
+          return [];
+        })
+      : null;
+
     try {
-      const primeraPagina = await cargarPaginaPiezas(0, INITIAL_BATCH_SIZE);
-      if (version !== cargaInventarioVersion) return;
+      if (!productos.length && promesaRespaldo) {
+        const primeraRespuesta = await Promise.race([
+          promesaRed.then((data) => ({ origen: "red", data })),
+          esperar(INITIAL_NETWORK_GRACE_MS).then(async () => ({
+            origen: "respaldo",
+            data: await promesaRespaldo
+          }))
+        ]);
 
-      const primeros = reconciliarProductos(
-        primeraPagina.map(normalizarProducto),
-        productos
-      );
+        if (version !== cargaInventarioVersion) return;
 
-      if (primeraPagina.length < INITIAL_BATCH_SIZE) {
-        usarInventario(primeros, textoConteoPiezas(primeros.length));
-        programarGuardarCache();
-        return;
+        if (primeraRespuesta.origen === "red") {
+          procesarPrimeraPaginaRed(primeraRespuesta.data, version);
+          return;
+        }
+
+        if (primeraRespuesta.data?.length) {
+          mostrandoRespaldoLocal = true;
+          usarInventario(
+            primeraRespuesta.data.map((row) => normalizarProducto(row, "respaldo")),
+            "Catálogo abierto. Comprobando disponibilidad en vivo...",
+            "ok"
+          );
+        }
       }
 
-      const inventarioProvisional = fusionarConInventarioActual(primeros, productos);
-      usarInventario(
-        inventarioProvisional,
-        `Mostrando las piezas más recientes. Completando el catálogo en segundo plano...`,
-        "ok",
-        { mantenerLimite: mantenerActual }
-      );
-
-      cargarRestoInventarioEnSegundoPlano(primeraPagina, version);
+      const primeraPagina = await promesaRed;
+      if (version !== cargaInventarioVersion) return;
+      procesarPrimeraPaginaRed(primeraPagina, version);
     } catch (error) {
       console.warn("No se pudo cargar Supabase REST:", error);
       if (version !== cargaInventarioVersion) return;
 
       if (productos.length) {
-        setStatus("Mostrando inventario guardado. La actualización en vivo no respondió; puedes seguir navegando.", "");
+        setStatus("El catálogo ya está disponible. La actualización en vivo tardó demasiado; confirma disponibilidad por WhatsApp.", "");
         return;
       }
 
-      try {
-        const respaldo = await cargarDatosJsonRespaldo();
-        if (version !== cargaInventarioVersion) return;
+      const respaldo = promesaRespaldo ? await promesaRespaldo : await cargarDatosJsonRespaldo().catch(() => []);
+      if (version !== cargaInventarioVersion) return;
+
+      if (respaldo.length) {
+        mostrandoRespaldoLocal = true;
         usarInventario(
           respaldo.map((row) => normalizarProducto(row, "respaldo")),
           "Mostrando respaldo local. Confirma disponibilidad por WhatsApp."
         );
-      } catch (fallbackError) {
-        console.warn("No se pudo cargar respaldo local:", fallbackError);
-        usarInventario([], "No pudimos cargar el inventario. Escríbenos por WhatsApp para revisar disponibilidad.", "err");
+        return;
       }
+
+      usarInventario([], "No pudimos cargar el inventario. Escríbenos por WhatsApp para revisar disponibilidad.", "err");
     }
+  }
+
+  function procesarPrimeraPaginaRed(primeraPagina, version) {
+    const mantenerLimite = productos.length > 0;
+    const veniaDeRespaldo = mostrandoRespaldoLocal;
+    mostrandoRespaldoLocal = false;
+    const anterioresComparables = veniaDeRespaldo ? [] : productos;
+    const primeros = reconciliarProductos(
+      primeraPagina.map(normalizarProducto),
+      anterioresComparables
+    );
+
+    if (primeraPagina.length < INITIAL_BATCH_SIZE) {
+      usarInventario(primeros, textoConteoPiezas(primeros.length), "ok", { mantenerLimite });
+      programarGuardarCache();
+      return;
+    }
+
+    const inventarioProvisional = veniaDeRespaldo
+      ? primeros
+      : fusionarConInventarioActual(primeros, productos);
+    usarInventario(
+      inventarioProvisional,
+      "Catálogo disponible. Completando piezas antiguas en segundo plano...",
+      "ok",
+      { mantenerLimite }
+    );
+
+    cargarRestoInventarioEnSegundoPlano(primeraPagina, version);
+  }
+
+  function esperar(ms) {
+    return new Promise((resolve) => window.setTimeout(resolve, ms));
   }
 
   async function cargarRestoInventarioEnSegundoPlano(primeraPagina, version) {
@@ -282,6 +335,7 @@
       if (!anterior) return nuevo;
 
       const fotos = anterior.fotos?.length ? anterior.fotos : nuevo.fotos;
+      const miniaturas = anterior.miniaturas?.length ? anterior.miniaturas : nuevo.miniaturas;
       const fotoCount = Math.max(anterior.fotoCount || 0, nuevo.fotoCount || 0, fotos.length);
       const fotosCargadas = Boolean(anterior.fotosCargadas || nuevo.fotosCargadas || fotos.length);
       const fotosCompletas = Boolean(anterior.fotosCompletas || nuevo.fotosCompletas || fotos.length);
@@ -289,6 +343,7 @@
 
       Object.assign(anterior, nuevo, {
         fotos,
+        miniaturas,
         fotoCount,
         fotosCargadas,
         fotosCompletas,
@@ -347,7 +402,7 @@
   }
 
   function normalizarProducto(row, origen = "supabase") {
-    const fotos = fotosDesdeRow(row, origen);
+    const medios = mediosDesdeRow(row, origen);
     const uuid = limpiar(row.uuid || row.id || "");
     const folio = limpiar(row.folio || row.id || "");
 
@@ -365,41 +420,65 @@
       numeroParte: limpiar(row.numero_parte || row.numeroParte || row["numero parte"] || row["No. Parte"]),
       descripcion: limpiar(row.descripcion || row.notas || row.Notas || row.descripcionSeo),
       disponible: row.disponible !== false,
-      fotos,
-      fotoCount: fotos.length,
-      fotosCargadas: fotos.length > 0 || origen === "respaldo",
-      fotosCompletas: fotos.length > 0 || origen === "respaldo",
+      fotos: medios.fotos,
+      miniaturas: medios.miniaturas,
+      fotoCount: Math.max(Number(row.fotoCount || 0), medios.fotos.length),
+      fotosCargadas: medios.fotos.length > 0 || origen === "respaldo",
+      fotosCompletas: origen === "respaldo" || Math.max(Number(row.fotoCount || 0), medios.fotos.length) <= medios.fotos.length,
       fotosCargando: false
     };
   }
 
-  function fotosDesdeRow(row, origen) {
+  function mediosDesdeRow(row, origen) {
     if (Array.isArray(row.fotos)) {
-      return row.fotos
-        .filter((foto) => foto && foto.url)
-        .sort((a, b) => (a.orden || 0) - (b.orden || 0))
-        .map((foto) => prepararUrlFoto(foto.url))
-        .filter(Boolean);
+      const ordenadas = row.fotos
+        .filter((foto) => foto && (foto.url || foto.storage_path || foto.urlCompleta))
+        .sort((a, b) => (a.orden || 0) - (b.orden || 0));
+
+      return {
+        fotos: ordenadas
+          .map((foto) => prepararUrlFoto(foto.urlCompleta || urlPublicaStorage(foto.storage_path) || foto.url, 1400))
+          .filter(Boolean),
+        miniaturas: ordenadas
+          .map((foto) => prepararUrlFoto(foto.miniatura || foto.thumbnail_url || foto.url || urlPublicaStorage(foto.storage_path), 520))
+          .filter(Boolean)
+      };
     }
 
     if (origen === "respaldo") {
-      return [row.fotoPrincipal, row.foto2, row.foto3, row.foto4, row.foto5, row.foto6, row.link]
-        .map(prepararUrlFoto)
-        .filter(Boolean);
+      const urls = [row.fotoPrincipal, row.foto2, row.foto3, row.foto4, row.foto5, row.foto6, row.link].filter(esUrlFotoValida);
+      return {
+        fotos: urls.map((url) => prepararUrlFoto(url, 1400)).filter(Boolean),
+        miniaturas: urls.map((url) => prepararUrlFoto(url, 520)).filter(Boolean)
+      };
     }
 
-    return [];
+    return { fotos: [], miniaturas: [] };
   }
 
-  function prepararUrlFoto(url) {
+  function urlPublicaStorage(storagePath) {
+    const path = limpiar(storagePath).replace(/^\/+/, "");
+    const bucket = limpiar(cfg.STORAGE_BUCKET || "fotos-piezas");
+    if (!path || !SUPABASE_URL || !bucket) return "";
+    return `${SUPABASE_URL}/storage/v1/object/public/${encodeURIComponent(bucket)}/${path.split("/").map(encodeURIComponent).join("/")}`;
+  }
+
+  function esUrlFotoValida(url) {
+    const texto = limpiar(url);
+    if (!texto) return false;
+    if (/drive\.google\.com\/(?:drive\/)?folders\//i.test(texto)) return false;
+    return true;
+  }
+
+  function prepararUrlFoto(url, anchoDrive = 1200) {
     const texto = limpiar(url);
     if (!texto) return "";
 
     const driveFile = texto.match(/drive\.google\.com\/file\/d\/([^/]+)/i);
-    if (driveFile?.[1]) return `https://drive.google.com/thumbnail?id=${encodeURIComponent(driveFile[1])}&sz=w720`;
+    if (driveFile?.[1]) return `https://drive.google.com/thumbnail?id=${encodeURIComponent(driveFile[1])}&sz=w${anchoDrive}`;
 
     const driveOpen = texto.match(/[?&]id=([^&]+)/i);
-    if (texto.includes("drive.google.com") && driveOpen?.[1]) return `https://drive.google.com/thumbnail?id=${encodeURIComponent(driveOpen[1])}&sz=w720`;
+    if (texto.includes("drive.google.com") && driveOpen?.[1]) return `https://drive.google.com/thumbnail?id=${encodeURIComponent(driveOpen[1])}&sz=w${anchoDrive}`;
 
     return texto;
   }
@@ -913,7 +992,19 @@
       img.loading = index === 0 ? "eager" : "lazy";
       img.decoding = "async";
       img.fetchPriority = index === 0 ? "high" : "low";
-      if (img.src !== producto.fotos[0]) img.src = producto.fotos[0];
+      img.width = 640;
+      img.height = 480;
+      const portada = producto.miniaturas?.[0] || producto.fotos[0];
+      const respaldo = producto.fotos[0] || portada;
+      img.dataset.fallbackSrc = respaldo;
+      img.onerror = () => {
+        const fallback = img.dataset.fallbackSrc;
+        if (fallback && img.src !== fallback) {
+          img.onerror = null;
+          img.src = fallback;
+        }
+      };
+      if (img.src !== portada) img.src = portada;
       const cantidad = producto.fotoCount || producto.fotos.length;
       count.textContent = cantidad > 1 ? `${cantidad} fotos` : "Ver foto";
       return;
@@ -994,7 +1085,12 @@
       const fotosPorPieza = await consultarFotosPorPiezas(pendientes.map((p) => p.uuid));
       pendientes.forEach((p) => {
         const fotos = fotosPorPieza.get(p.uuid) || [];
-        p.fotos = fotos.map((foto) => prepararUrlFoto(foto.url)).filter(Boolean);
+        p.fotos = fotos
+          .map((foto) => prepararUrlFoto(urlPublicaStorage(foto.storage_path) || foto.url, 1400))
+          .filter(Boolean);
+        p.miniaturas = fotos
+          .map((foto) => prepararUrlFoto(foto.url || urlPublicaStorage(foto.storage_path), 520))
+          .filter(Boolean);
         p.fotoCount = fotos.length;
         p.fotosCargadas = true;
         p.fotosCompletas = true;
@@ -1016,11 +1112,11 @@
 
     for (const lote of partirEnLotes(limpios, PHOTO_BATCH_SIZE)) {
       const url = restURL("fotos", {
-        select: "pieza_id,url,orden",
+        select: "pieza_id,url,storage_path,orden",
         pieza_id: `in.(${lote.join(",")})`,
         order: "orden.asc"
       });
-      const data = await fetchJSON(url, API_TIMEOUT_MS);
+      const data = await fetchJSON(url, PHOTO_TIMEOUT_MS);
       (data || []).forEach((foto) => {
         const piezaId = limpiar(foto.pieza_id);
         if (!mapa.has(piezaId)) mapa.set(piezaId, []);
@@ -1204,7 +1300,8 @@
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = index === indiceFotoDetalle ? "activo" : "";
-      btn.innerHTML = `<img src="${escaparAttr(url)}" alt="Miniatura ${index + 1}" loading="lazy" decoding="async">`;
+      const miniatura = productoDetalle.miniaturas?.[index] || url;
+      btn.innerHTML = `<img src="${escaparAttr(miniatura)}" alt="Miniatura ${index + 1}" loading="lazy" decoding="async">`;
       btn.addEventListener("click", () => {
         indiceFotoDetalle = index;
         pintarFotoDetalle();
@@ -1304,7 +1401,7 @@
     link.classList.remove("disabled");
     cont.innerHTML = items.map((p) => `
       <div class="cart-item">
-        ${p.fotos[0] ? `<img src="${escaparAttr(p.fotos[0])}" alt="${escaparAttr(tituloProducto(p))}" loading="lazy" decoding="async">` : `<div class="no-img">Sin foto</div>`}
+        ${(p.miniaturas?.[0] || p.fotos[0]) ? `<img src="${escaparAttr(p.miniaturas?.[0] || p.fotos[0])}" alt="${escaparAttr(tituloProducto(p))}" loading="lazy" decoding="async">` : `<div class="no-img">Sin foto</div>`}
         <div>
           <strong>${escapar(tituloProducto(p))}</strong>
           <small>ID: ${escapar(p.id)} · ${escapar(formatearPrecio(p.precio))}</small>
@@ -1458,7 +1555,11 @@
         numeroParte: p.numeroParte,
         descripcion: p.descripcion,
         disponible: p.disponible,
-        fotos: p.fotos.slice(0, 1).map((url, orden) => ({ url, orden })),
+        fotos: p.fotos.slice(0, 1).map((url, orden) => ({
+          url,
+          miniatura: p.miniaturas?.[orden] || url,
+          orden
+        })),
         fotoCount: p.fotoCount || p.fotos.length
       }));
       localStorage.setItem(CACHE_KEY, JSON.stringify({ creadoEn: Date.now(), data }));
