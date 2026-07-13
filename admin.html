@@ -586,6 +586,7 @@
             <small id="sessionRole">Verificando usuario</small>
           </div>
           <a class="btn" href="index.html" target="_blank" rel="noopener">Abrir catálogo</a>
+          <button id="optimizeExistingPhotos" class="btn admin-only" type="button" title="Crear miniaturas ligeras sin borrar las fotos grandes">Optimizar fotos</button>
           <button id="exportExcel" class="btn gold admin-only" type="button">Exportar Excel</button>
           <button id="logoutBtn" class="btn danger" type="button">Salir</button>
         </div>
@@ -882,7 +883,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="supabase-config.js"></script>
-  <script src="admin.js?v=velocidad-fotos-2"></script>
+  <script src="admin.js?v=velocidad-fotos-3"></script>
   <script>
   function aplicarVistaPorRol() {
     const roleEl = document.getElementById("sessionRole");
