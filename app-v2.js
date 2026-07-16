@@ -38,6 +38,19 @@
   let cacheSaveTimer = null;
   let mostrandoRespaldoLocal = false;
 
+  function emitirEventoCatalogo(nombre, detalle = {}) {
+    document.dispatchEvent(new CustomEvent(nombre, { detail: detalle }));
+  }
+
+  window.AV_CATALOG_BRIDGE = Object.freeze({
+    getProducts: () => productos.map((producto) => ({ ...producto, fotos: [...(producto.fotos || [])], miniaturas: [...(producto.miniaturas || [])] })),
+    search: (texto) => productos.filter((producto) => coincideBusquedaInteligente(producto, texto)),
+    createProductUrl: (producto) => crearUrlProducto(producto),
+    createWhatsAppUrl: (producto) => crearWhatsAppProducto(producto),
+    formatPrice: (precio) => formatearPrecio(precio),
+    getWhatsAppNumber: () => WHATSAPP
+  });
+
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => Array.from(document.querySelectorAll(selector));
   const id = (nombre) => document.getElementById(nombre);
@@ -309,6 +322,7 @@
     actualizarSEO(productos);
     filtrar({ mantenerLimite: Boolean(opciones.mantenerLimite) });
     setStatus(mensaje, tipo);
+    emitirEventoCatalogo("av:catalog-ready", { total: productos.length });
   }
 
   async function cargarPaginaPiezas(offset, limit) {
@@ -1327,7 +1341,7 @@
   }
 
   function crearUrlProducto(p) {
-    const url = new URL(PRODUCT_PAGE, window.location.href);
+    const url = new URL(PRODUCT_PAGE, document.baseURI || window.location.href);
     url.searchParams.set("id", p.id || p.uuid || "");
     return url.toString();
   }
