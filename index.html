@@ -66,6 +66,7 @@
   </script>
 
   <link rel="stylesheet" href="style-v2.css?v=12" />
+  <link rel="stylesheet" href="av-ai.css?v=20260716b" />
 </head>
 <body>
   <header class="top-strip">
@@ -412,6 +413,23 @@
     </article>
   </template>
 
+  <button class="av-assistant-launcher" id="avAssistantLauncher" type="button" aria-expanded="false" aria-controls="avAssistantPanel">
+    <span aria-hidden="true">🔎</span><b>Buscar con asistente</b>
+  </button>
+  <aside class="av-assistant-panel" id="avAssistantPanel" aria-hidden="true" aria-label="Asistente de búsqueda de autopartes">
+    <div class="av-assistant-head">
+      <div><strong>Asistente VENCES</strong><span>Busca solo dentro del inventario disponible</span></div>
+      <button class="av-assistant-close" id="avAssistantClose" type="button" aria-label="Cerrar asistente">×</button>
+    </div>
+    <div class="av-assistant-messages" id="avAssistantMessages" aria-live="polite">
+      <div class="av-msg bot">Escribe como hablas. Ejemplo: “luz trasera izquierda de Equinox 2012”.</div>
+    </div>
+    <form class="av-assistant-form" id="avAssistantForm">
+      <input id="avAssistantInput" autocomplete="off" maxlength="180" placeholder="¿Qué pieza buscas?" aria-label="Pieza que buscas">
+      <button type="submit">Buscar</button>
+    </form>
+  </aside>
+
   <noscript>
     <section class="noscript-seo">
       <div class="container">
@@ -422,7 +440,9 @@
   </noscript>
 
   <script src="supabase-config.js?v=4" defer></script>
-  <script src="app-v2.js?v=25" defer></script>
+  <script src="ai-config.js?v=20260716b" defer></script>
+  <script src="app-v2.js?v=27" defer></script>
+  <script src="av-ai-public.js?v=20260716b" defer></script>
 </body>
 </html>
 
