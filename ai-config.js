@@ -6,7 +6,7 @@ window.AV_AI_CONFIG = Object.freeze({
   publicAssistant: true,
   crmEnabled: true,
   demandTrackingEnabled: true,
-  remoteEnabled: false,
+  remoteEnabled: true,
   publicRemoteEnabled: false,
   edgeFunctionName: "ai-copilot",
   requestTimeoutMs: 18000,
