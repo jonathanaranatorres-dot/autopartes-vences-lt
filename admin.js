@@ -25,6 +25,20 @@ let extrasDisponibles = {
   auditoriaPiezas: false
 };
 
+function emitirEventoAdmin(nombre, detalle = {}) {
+  document.dispatchEvent(new CustomEvent(nombre, { detail: detalle }));
+}
+
+window.AV_ADMIN_BRIDGE = Object.freeze({
+  getInventory: () => piezas.map((pieza) => ({ ...pieza, fotos: [...(pieza.fotos || [])] })),
+  getMonthlySales: () => ventasMes.map((venta) => ({ ...venta })),
+  getCurrentUser: () => usuarioActual ? { id: usuarioActual.id, email: usuarioActual.email } : null,
+  getCurrentProfile: () => perfilActual ? { ...perfilActual } : null,
+  getSelectedFiles: () => [...archivosSeleccionados],
+  isAdmin: () => esAdminActual(),
+  refreshInventory: () => cargarPiezas()
+});
+
 const $ = (id) => document.getElementById(id);
 
 function setStatus(id, mensaje, tipo = "") {
@@ -459,6 +473,7 @@ async function prepararSesionPrivada() {
   await detectarExtras();
   await cargarPerfilActual();
   pintarUsuarioActual();
+  emitirEventoAdmin("av:session-ready", { userId: usuarioActual?.id || null, role: perfilActual?.rol || null });
 }
 
 async function cargarPerfilesRelacionados() {
@@ -755,6 +770,7 @@ async function cargarPiezas() {
   pintarVentasResumen();
   pintarResumenFamilias();
   setStatus("tableStatus", `${piezas.length} piezas cargadas.`, "ok");
+  emitirEventoAdmin("av:inventory-updated", { total: piezas.length, sales: ventasMes.length });
 }
 
 function normalizarPiezaConFotos(pieza) {
@@ -793,6 +809,7 @@ async function actualizarPiezaLocal(piezaId, opciones = {}) {
   pintarTabla();
   pintarStats();
   pintarResumenFamilias();
+  emitirEventoAdmin("av:inventory-updated", { total: piezas.length, changedId: piezaId });
   return piezaActualizada;
 }
 
