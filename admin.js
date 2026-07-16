@@ -11,6 +11,9 @@ let fotosEliminadas = [];
 let contadorFotoTemporal = 0;
 let filtroTabla = "";
 let filtroFamilia = "";
+let paginaTabla = 1;
+let temporizadorBusquedaAdmin = null;
+const FILAS_POR_PAGINA = 40;
 let usuarioActual = null;
 let perfilActual = null;
 let perfilesPorId = new Map();
@@ -245,6 +248,27 @@ function configurarCapturaRapida() {
     $("folio").value = folio;
     seleccionarFamiliaPorFolio(folio);
   });
+
+  document.addEventListener("keydown", manejarAtajosCaptura);
+}
+
+function actualizarTextoBotonGuardar() {
+  const boton = $("saveBtn");
+  if (!boton) return;
+  boton.textContent = $("piezaId")?.value ? "Guardar cambios" : "Guardar y capturar siguiente";
+}
+
+function manejarAtajosCaptura(event) {
+  const tecla = String(event.key || "").toLowerCase();
+  const esAtajo = (event.ctrlKey || event.metaKey) && (tecla === "enter" || tecla === "s");
+  if (!esAtajo) return;
+
+  const adminVisible = $("adminView") && !$("adminView").classList.contains("hidden");
+  const formularioVisible = $("piezaForm")?.offsetParent !== null;
+  if (!adminVisible || !formularioVisible || $("saveBtn")?.disabled) return;
+
+  event.preventDefault();
+  $("piezaForm").requestSubmit();
 }
 
 function textoFamiliaPieza(p) {
@@ -555,20 +579,21 @@ function resumenVendedores() {
 
 function limpiarFormulario(opciones = {}) {
   const preservarVehiculo = Boolean(opciones.preservarVehiculo && $("mantenerVehiculo")?.checked);
-  const guardado = preservarVehiculo ? {
-    familia: $("familiaCaptura")?.value || "",
-    marca: $("marca").value,
-    modelo: $("modelo").value,
-    anio: $("anio").value
-  } : null;
+  const preservarFamilia = Boolean(opciones.preservarFamilia && $("mantenerFamilia")?.checked);
+  const guardado = {
+    familia: preservarFamilia ? ($("familiaCaptura")?.value || "") : "",
+    marca: preservarVehiculo ? $("marca").value : "",
+    modelo: preservarVehiculo ? $("modelo").value : "",
+    anio: preservarVehiculo ? $("anio").value : ""
+  };
 
   $("piezaId").value = "";
-  if ($("familiaCaptura")) $("familiaCaptura").value = guardado?.familia || "";
+  if ($("familiaCaptura")) $("familiaCaptura").value = guardado.familia;
   $("folio").value = "";
   $("pieza").value = "";
-  $("marca").value = guardado?.marca || "";
-  $("modelo").value = guardado?.modelo || "";
-  $("anio").value = guardado?.anio || "";
+  $("marca").value = guardado.marca;
+  $("modelo").value = guardado.modelo;
+  $("anio").value = guardado.anio;
   $("lado").value = "";
   $("color").value = "";
   $("estado").value = ESTADO_DEFAULT_CAPTURA;
@@ -581,11 +606,51 @@ function limpiarFormulario(opciones = {}) {
   $("formTitle").textContent = "Nueva pieza";
   ultimoFolioGenerado = "";
   setFolioAyuda("");
-  setStatus("formStatus", "");
+  actualizarTextoBotonGuardar();
 
-  if (preservarVehiculo && guardado?.familia) {
+  if (!opciones.conservarEstado) {
+    setStatus("formStatus", "");
+  }
+
+  if (guardado.familia) {
     autollenarFolio(true);
   }
+
+  if (opciones.enfocarPieza) {
+    requestAnimationFrame(() => $("pieza")?.focus());
+  }
+}
+
+function valoresRecientes(campo, extras = [], limite = 60) {
+  const vistos = new Set();
+  const salida = [];
+  const candidatos = [
+    ...(piezas || []).map((pieza) => pieza?.[campo]),
+    ...extras
+  ];
+
+  candidatos.forEach((valor) => {
+    const limpio = mayusculas(valor);
+    if (!limpio || vistos.has(limpio) || salida.length >= limite) return;
+    vistos.add(limpio);
+    salida.push(limpio);
+  });
+
+  return salida;
+}
+
+function pintarDatalist(id, valores) {
+  const lista = $(id);
+  if (!lista) return;
+  lista.innerHTML = valores.map((valor) => `<option value="${escapeHtml(valor)}"></option>`).join("");
+}
+
+function actualizarListasSugerencias() {
+  pintarDatalist("listaModelos", valoresRecientes("modelo"));
+  pintarDatalist("listaAnios", valoresRecientes("anio"));
+  pintarDatalist("listaColores", valoresRecientes("color", [
+    "NEGRO", "BLANCO", "GRIS", "PLATA", "ROJO", "AZUL", "VERDE", "BEIGE", "CAFÉ", "DORADO"
+  ]));
 }
 
 function datosFormulario() {
@@ -680,18 +745,65 @@ async function cargarPiezas() {
     return;
   }
 
-  piezas = (data || []).map((pieza) => ({
-    ...pieza,
-    fotos: [...(pieza.fotos || [])].sort((a, b) => (a.orden || 0) - (b.orden || 0))
-  }));
+  piezas = (data || []).map(normalizarPiezaConFotos);
 
   await cargarPerfilesRelacionados();
   await cargarVentasMes();
+  actualizarListasSugerencias();
   pintarTabla();
   pintarStats();
   pintarVentasResumen();
   pintarResumenFamilias();
   setStatus("tableStatus", `${piezas.length} piezas cargadas.`, "ok");
+}
+
+function normalizarPiezaConFotos(pieza) {
+  return {
+    ...pieza,
+    fotos: [...(pieza?.fotos || [])].sort((a, b) => Number(a.orden || 0) - Number(b.orden || 0))
+  };
+}
+
+async function actualizarPiezaLocal(piezaId, opciones = {}) {
+  const { data, error } = await avDB
+    .from("piezas")
+    .select("*, fotos(id, url, storage_path, orden)")
+    .eq("id", piezaId)
+    .single();
+
+  if (error) throw error;
+
+  const piezaActualizada = normalizarPiezaConFotos(data);
+  const indice = piezas.findIndex((pieza) => pieza.id === piezaId);
+
+  if (indice >= 0) {
+    piezas[indice] = piezaActualizada;
+  } else {
+    piezas.unshift(piezaActualizada);
+  }
+
+  piezas.sort((a, b) => {
+    const fechaA = new Date(a.created_at || 0).getTime();
+    const fechaB = new Date(b.created_at || 0).getTime();
+    return fechaB - fechaA;
+  });
+
+  if (opciones.irPrimeraPagina) paginaTabla = 1;
+  actualizarListasSugerencias();
+  pintarTabla();
+  pintarStats();
+  pintarResumenFamilias();
+  return piezaActualizada;
+}
+
+async function refrescarPiezaGuardada(piezaId, opciones = {}) {
+  try {
+    return await actualizarPiezaLocal(piezaId, opciones);
+  } catch (error) {
+    console.warn("No se pudo actualizar solo la pieza guardada. Se recargará el inventario completo:", error.message);
+    await cargarPiezas();
+    return piezas.find((pieza) => pieza.id === piezaId) || null;
+  }
 }
 
 function pintarStats() {
@@ -801,31 +913,54 @@ function piezasFiltradas() {
   });
 }
 
+function actualizarPaginacion(totalResultados, inicio, fin) {
+  const totalPaginas = Math.max(1, Math.ceil(totalResultados / FILAS_POR_PAGINA));
+  const info = $("paginaInfo");
+  const anterior = $("paginaAnterior");
+  const siguiente = $("paginaSiguiente");
+
+  if (info) {
+    info.textContent = totalResultados
+      ? `Página ${paginaTabla} de ${totalPaginas} · ${inicio + 1}-${fin} de ${totalResultados}`
+      : "Página 1 de 1 · Sin resultados";
+  }
+  if (anterior) anterior.disabled = paginaTabla <= 1 || !totalResultados;
+  if (siguiente) siguiente.disabled = paginaTabla >= totalPaginas || !totalResultados;
+}
+
 function pintarTabla() {
   const tbody = $("tablaPiezas");
   const filtradas = piezasFiltradas();
   tbody.innerHTML = "";
 
   if (!filtradas.length) {
+    paginaTabla = 1;
     tbody.innerHTML = `<tr><td colspan="8">No hay piezas con ese filtro.</td></tr>`;
-    setStatus("tableStatus", `Sin resultados. Prueba otra familia o limpia los filtros.`, "");
+    actualizarPaginacion(0, 0, 0);
+    setStatus("tableStatus", "Sin resultados. Prueba otra familia o limpia los filtros.", "");
     return;
   }
 
+  const totalPaginas = Math.max(1, Math.ceil(filtradas.length / FILAS_POR_PAGINA));
+  paginaTabla = Math.min(Math.max(1, paginaTabla), totalPaginas);
+  const inicio = (paginaTabla - 1) * FILAS_POR_PAGINA;
+  const fin = Math.min(inicio + FILAS_POR_PAGINA, filtradas.length);
+  const visibles = filtradas.slice(inicio, fin);
+
   const filtrosActivos = filtroTabla || filtroFamilia;
   if (filtrosActivos) {
-    setStatus("tableStatus", `${filtradas.length} de ${piezas.length} pieza(s) encontradas.`, "ok");
+    setStatus("tableStatus", `${filtradas.length} de ${piezas.length} pieza(s) encontradas. Mostrando ${inicio + 1}-${fin}.`, "ok");
   } else {
-    setStatus("tableStatus", `${piezas.length} piezas cargadas.`, "ok");
+    setStatus("tableStatus", `${piezas.length} piezas cargadas. Mostrando ${inicio + 1}-${fin}.`, "ok");
   }
 
-  filtradas.forEach((p) => {
+  visibles.forEach((p) => {
     const primeraFoto = p.fotos?.[0]?.url || "";
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>
         <div class="thumbs">
-          ${primeraFoto ? `<img src="${escapeHtml(primeraFoto)}" alt="Foto">` : ""}
+          ${primeraFoto ? `<img src="${escapeHtml(primeraFoto)}" alt="Foto de ${escapeHtml(p.pieza || "pieza")}" loading="lazy" decoding="async">` : ""}
           <span>${p.fotos?.length || 0}</span>
         </div>
       </td>
@@ -847,13 +982,15 @@ function pintarTabla() {
     tbody.appendChild(tr);
   });
 
-  tbody.querySelectorAll("button[data-action]").forEach((btn) => {
-  btn.addEventListener("click", () => manejarAccionTabla(btn.dataset.action, btn.dataset.id));
-});
+  actualizarPaginacion(filtradas.length, inicio, fin);
 
-if (typeof aplicarVistaPorRol === "function") {
-  aplicarVistaPorRol();
-}
+  tbody.querySelectorAll("button[data-action]").forEach((btn) => {
+    btn.addEventListener("click", () => manejarAccionTabla(btn.dataset.action, btn.dataset.id));
+  });
+
+  if (typeof aplicarVistaPorRol === "function") {
+    aplicarVistaPorRol();
+  }
 }
 
 async function manejarAccionTabla(action, id) {
@@ -1114,6 +1251,7 @@ function editarPieza(p) {
   }));
   pintarPreview();
   $("formTitle").textContent = `Editando ${p.folio || p.pieza || "pieza"}`;
+  actualizarTextoBotonGuardar();
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
@@ -1220,11 +1358,15 @@ async function guardarPieza(event) {
   let payload = datosFormulario();
   if (!payload.pieza) {
     setStatus("formStatus", "La pieza es obligatoria.", "err");
+    $("pieza")?.focus();
     return;
   }
 
   const idActual = $("piezaId").value;
-  $("saveBtn").disabled = true;
+  const esNueva = !idActual;
+  const botonGuardar = $("saveBtn");
+  botonGuardar.disabled = true;
+  botonGuardar.setAttribute("aria-busy", "true");
   setStatus("formStatus", "Guardando publicación...");
 
   let piezaGuardada;
@@ -1259,13 +1401,26 @@ async function guardarPieza(event) {
       await registrarMovimiento("actualizar_fotos", piezaGuardada, resumenFotos);
     }
 
-    setStatus("formStatus", "Publicación guardada. Fotos y portada actualizadas.", "ok");
-    limpiarFormulario({ preservarVehiculo: true });
-    await cargarPiezas();
+    await refrescarPiezaGuardada(piezaGuardada.id, { irPrimeraPagina: esNueva });
+
+    const folioGuardado = piezaGuardada.folio || payload.folio || "La pieza";
+    limpiarFormulario({
+      preservarVehiculo: true,
+      preservarFamilia: true,
+      conservarEstado: true,
+      enfocarPieza: true
+    });
+    setStatus(
+      "formStatus",
+      `${folioGuardado} quedó guardada correctamente. El formulario ya está listo para la siguiente pieza.`,
+      "ok"
+    );
   } catch (error) {
     setStatus("formStatus", "Error guardando: " + error.message, "err");
   } finally {
-    $("saveBtn").disabled = false;
+    botonGuardar.disabled = false;
+    botonGuardar.removeAttribute("aria-busy");
+    actualizarTextoBotonGuardar();
   }
 }
 
@@ -1961,7 +2116,7 @@ function registrarEventos() {
   $("loginForm").addEventListener("submit", iniciarSesion);
   $("logoutBtn").addEventListener("click", cerrarSesion);
   $("piezaForm").addEventListener("submit", guardarPieza);
-  $("resetBtn").addEventListener("click", () => limpiarFormulario({ preservarVehiculo: false }));
+  $("resetBtn").addEventListener("click", () => limpiarFormulario({ preservarVehiculo: false, preservarFamilia: false }));
   $("excelInput").addEventListener("change", importarExcel);
   $("exportExcel").addEventListener("click", exportarExcel);
   $("optimizeExistingPhotos")?.addEventListener("click", optimizarFotosExistentes);
@@ -1970,19 +2125,35 @@ function registrarEventos() {
   $("preview").addEventListener("click", manejarAccionPreview);
   $("searchAdmin").addEventListener("input", (event) => {
     filtroTabla = event.target.value;
-    pintarTabla();
+    paginaTabla = 1;
+    clearTimeout(temporizadorBusquedaAdmin);
+    temporizadorBusquedaAdmin = setTimeout(pintarTabla, 120);
   });
   $("familiaAdmin")?.addEventListener("change", (event) => {
     filtroFamilia = event.target.value;
+    paginaTabla = 1;
     pintarTabla();
   });
   $("limpiarFiltrosAdmin")?.addEventListener("click", () => {
     filtroTabla = "";
     filtroFamilia = "";
+    paginaTabla = 1;
     if ($("searchAdmin")) $("searchAdmin").value = "";
     if ($("familiaAdmin")) $("familiaAdmin").value = "";
     pintarTabla();
-    setStatus("tableStatus", `${piezas.length} piezas cargadas.`, "ok");
+  });
+  $("paginaAnterior")?.addEventListener("click", () => {
+    if (paginaTabla <= 1) return;
+    paginaTabla -= 1;
+    pintarTabla();
+    $("searchAdmin")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  });
+  $("paginaSiguiente")?.addEventListener("click", () => {
+    const totalPaginas = Math.max(1, Math.ceil(piezasFiltradas().length / FILAS_POR_PAGINA));
+    if (paginaTabla >= totalPaginas) return;
+    paginaTabla += 1;
+    pintarTabla();
+    $("searchAdmin")?.scrollIntoView({ behavior: "smooth", block: "center" });
   });
   configurarDropzone();
 }
