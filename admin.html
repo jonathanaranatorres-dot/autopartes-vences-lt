@@ -6,6 +6,7 @@
   <title>Admin | AUTOPARTES VENCES</title>
   <meta name="robots" content="noindex, nofollow">
   <link rel="preconnect" href="https://cdn.jsdelivr.net">
+  <link rel="stylesheet" href="av-ai.css?v=20260716b">
   <style>
     :root {
       --bg: #07080d;
@@ -634,6 +635,54 @@
         <form id="piezaForm" class="form-grid">
           <input type="hidden" id="piezaId">
 
+          <details class="ai-shell" id="aiCopilot" open>
+            <summary>
+              <span class="ai-summary-copy">
+                <strong>✨ Copiloto de captura</strong>
+                <span>Dicta o escribe los datos. Solo propone y nunca guarda una pieza por sí solo.</span>
+              </span>
+              <span class="ai-pill" id="aiServiceMode">Modo local seguro</span>
+            </summary>
+            <div class="ai-body">
+              <label class="ai-label" for="aiDictation">
+                <span>Descripción rápida de la pieza</span>
+                <small>Ejemplo: faro izquierdo Chevrolet Cruze 2015...</small>
+              </label>
+              <textarea class="ai-textarea" id="aiDictation" placeholder="Describe pieza, marca, modelo, año, lado, estado, detalle, número de parte y precio."></textarea>
+              <div class="ai-toolbar">
+                <button class="btn mini" id="aiVoiceBtn" type="button">Dictar pieza</button>
+                <button class="btn mini gold" id="aiAnalyzeBtn" type="button">Analizar captura</button>
+                <button class="btn mini" id="aiPhotoReviewBtn" type="button">Revisar fotos</button>
+                <button class="btn mini" id="aiGeneratePostsBtn" type="button">Crear publicaciones</button>
+                <button class="btn mini danger" id="aiClearBtn" type="button">Limpiar IA</button>
+              </div>
+              <p class="ai-status" id="aiStatus" aria-live="polite"></p>
+
+              <div class="ai-result" id="aiResult" hidden>
+                <div class="ai-result-head">
+                  <strong>Propuesta detectada</strong>
+                  <span class="ai-confidence" id="aiConfidence"></span>
+                </div>
+                <div class="ai-field-grid" id="aiFields"></div>
+                <ul class="ai-warning-list" id="aiWarnings" hidden></ul>
+                <div class="ai-toolbar">
+                  <button class="btn mini primary" id="aiApplyBtn" type="button" disabled>Aplicar al formulario</button>
+                </div>
+              </div>
+
+              <div class="ai-result" id="aiPhotoReport" hidden>
+                <div class="ai-result-head"><strong>Revisión técnica de fotos</strong><span class="ai-confidence">No modifica archivos</span></div>
+                <div class="ai-photo-grid" id="aiPhotoGrid"></div>
+              </div>
+
+              <div class="ai-result" id="aiPublicationResult" hidden>
+                <div class="ai-result-head"><strong>Textos por canal</strong><span class="ai-confidence">Revisión humana obligatoria</span></div>
+                <textarea class="ai-copy-output" id="aiPublications" readonly></textarea>
+                <div class="ai-toolbar"><button class="btn mini" id="aiCopyPostsBtn" type="button">Copiar textos</button></div>
+              </div>
+            </div>
+          </details>
+
           <div class="section-title"><span>01</span> Datos principales</div>
 
           <div class="field">
@@ -876,6 +925,32 @@
           </div>
         </div>
 
+        <details class="ai-shell admin-only" id="aiBusinessIntelligence">
+          <summary>
+            <span class="ai-summary-copy">
+              <strong>🧠 Inteligencia de inventario</strong>
+              <span>Alertas de piezas estancadas, publicaciones incompletas y oportunidades de precio.</span>
+            </span>
+          </summary>
+          <div class="ai-body">
+            <div class="ai-kpi-grid">
+              <article class="ai-kpi"><strong id="aiKpiStale">0</strong><span>Piezas disponibles con 60+ días</span></article>
+              <article class="ai-kpi"><strong id="aiKpiPhotos">0</strong><span>Piezas sin fotografías</span></article>
+              <article class="ai-kpi"><strong id="aiKpiPrice">0</strong><span>Piezas sin precio</span></article>
+              <article class="ai-kpi"><strong id="aiKpiHidden">0</strong><span>Piezas no disponibles</span></article>
+            </div>
+            <div class="ai-insights-list" id="aiInsightsList"></div>
+            <section class="ai-demand-box" aria-labelledby="aiDemandTitle">
+              <div class="ai-demand-head">
+                <strong id="aiDemandTitle">Búsquedas que no encontraron pieza</strong>
+                <span>Se alimenta con consultas reales del asistente público.</span>
+              </div>
+              <div class="ai-demand-list" id="aiDemandList"><p class="empty-state">Esperando datos de demanda...</p></div>
+            </section>
+            <div class="ai-toolbar"><button class="btn mini" id="aiRefreshInsights" type="button">Actualizar análisis</button></div>
+          </div>
+        </details>
+
         <div class="toolbar">
           <input id="searchAdmin" placeholder="Buscar por ID, pieza, marca, modelo, año...">
           <select id="familiaAdmin" aria-label="Filtrar por tipo de pieza">
@@ -925,12 +1000,37 @@
         <p id="tableStatus" class="status" aria-live="polite"></p>
       </section>
     </div>
+
+    <section class="wrap panel admin-only" id="aiSalesCenter" style="margin-bottom:60px">
+      <h2>Centro de prospectos y seguimiento</h2>
+      <p class="hint">Registra a quien pregunta por una pieza. El sistema prepara el seguimiento y evita que la venta se pierda entre conversaciones.</p>
+      <div class="ai-crm-grid">
+        <form class="ai-lead-form" id="aiLeadForm">
+          <div class="field"><label for="aiLeadName">Cliente</label><input id="aiLeadName" placeholder="Nombre o taller"></div>
+          <div class="field"><label for="aiLeadPhone">WhatsApp</label><input id="aiLeadPhone" inputmode="tel" placeholder="55 0000 0000"></div>
+          <div class="field full"><label for="aiLeadPart">Pieza buscada *</label><input id="aiLeadPart" required placeholder="FARO IZQUIERDO"></div>
+          <div class="field full"><label for="aiLeadVehicle">Vehículo</label><input id="aiLeadVehicle" placeholder="CHEVROLET CRUZE 2015"></div>
+          <div class="field"><label for="aiLeadBudget">Presupuesto</label><input id="aiLeadBudget" type="number" min="0" step="1" placeholder="1500"></div>
+          <div class="field"><label for="aiLeadFollowup">Seguimiento</label><input id="aiLeadFollowup" type="date"></div>
+          <div class="field full"><label for="aiLeadNotes">Notas</label><textarea id="aiLeadNotes" placeholder="Pidió fotos, busca original, requiere envío..."></textarea></div>
+          <div class="form-actions"><button class="btn primary" type="submit">Guardar prospecto</button></div>
+        </form>
+        <div>
+          <div class="sales-head">
+            <div><h3>Seguimientos</h3><span id="aiLeadsMode">Preparando almacenamiento...</span></div>
+          </div>
+          <div class="ai-lead-list" id="aiLeadList"><p class="empty-state">Cargando prospectos...</p></div>
+        </div>
+      </div>
+    </section>
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="supabase-config.js"></script>
-  <script src="admin.js?v=captura-rapida-4"></script>
+  <script src="ai-config.js?v=20260716b"></script>
+  <script src="admin.js?v=captura-rapida-6-ia2"></script>
+  <script src="av-ai-admin.js?v=20260716b"></script>
   <script>
   function aplicarVistaPorRol() {
     const roleEl = document.getElementById("sessionRole");
