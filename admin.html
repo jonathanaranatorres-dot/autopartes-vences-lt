@@ -360,6 +360,24 @@
       background: rgba(255,255,255,.035);
     }
     .form-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 10px; }
+    .capture-shortcuts {
+      grid-column: 1 / -1;
+      margin: -2px 0 0;
+      color: var(--muted);
+      font-size: .8rem;
+      line-height: 1.4;
+    }
+    .capture-shortcuts kbd {
+      display: inline-block;
+      padding: 3px 7px;
+      border: 1px solid var(--line);
+      border-bottom-color: rgba(255,255,255,.28);
+      border-radius: 7px;
+      color: #ffe4a0;
+      background: rgba(255,255,255,.055);
+      font: inherit;
+      font-weight: 850;
+    }
 
     .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 16px; }
     .toolbar input { flex: 1; min-width: 220px; }
@@ -436,6 +454,21 @@
       border-radius: 20px;
       background: rgba(8,13,21,.56);
       box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
+    }
+    .pagination {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 14px;
+    }
+    .pagination span {
+      min-width: 210px;
+      color: var(--muted);
+      text-align: center;
+      font-size: .86rem;
+      font-weight: 750;
     }
     table { width: 100%; border-collapse: collapse; min-width: 1040px; }
     th, td { padding: 13px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; }
@@ -708,12 +741,14 @@
 
           <div class="field">
             <label for="modelo">Modelo</label>
-            <input id="modelo" placeholder="BEAT">
+            <input id="modelo" list="listaModelos" placeholder="BEAT" autocomplete="off">
+            <datalist id="listaModelos"></datalist>
           </div>
 
           <div class="field">
             <label for="anio">Año</label>
-            <input id="anio" placeholder="2014-2021">
+            <input id="anio" list="listaAnios" placeholder="2014-2021" autocomplete="off">
+            <datalist id="listaAnios"></datalist>
           </div>
 
           <div class="field">
@@ -738,11 +773,17 @@
             <input id="mantenerVehiculo" type="checkbox" checked>
           </label>
 
+          <label class="field full checkrow">
+            <span>Mantener también la familia para capturar varias piezas del mismo grupo</span>
+            <input id="mantenerFamilia" type="checkbox">
+          </label>
+
           <div class="section-title"><span>03</span> Detalles de la pieza</div>
 
           <div class="field">
             <label for="color">Color</label>
-            <input id="color" placeholder="BLANCO">
+            <input id="color" list="listaColores" placeholder="BLANCO" autocomplete="off">
+            <datalist id="listaColores"></datalist>
           </div>
 
           <div class="field">
@@ -786,11 +827,12 @@
           <div id="preview" class="preview"></div>
 
           <div class="form-actions">
-            <button class="btn primary" id="saveBtn" type="submit">Guardar publicación</button>
+            <button class="btn primary" id="saveBtn" type="submit">Guardar y capturar siguiente</button>
             <button class="btn" id="resetBtn" type="button">Limpiar</button>
           </div>
+          <p class="capture-shortcuts">Atajo de captura: <kbd>Ctrl</kbd> + <kbd>Enter</kbd> o <kbd>Ctrl</kbd> + <kbd>S</kbd></p>
         </form>
-        <p id="formStatus" class="status"></p>
+        <p id="formStatus" class="status" aria-live="polite"></p>
       </section>
 
       <section class="panel">
@@ -875,7 +917,12 @@
             <tbody id="tablaPiezas"></tbody>
           </table>
         </div>
-        <p id="tableStatus" class="status"></p>
+        <div class="pagination" id="paginacionAdmin">
+          <button id="paginaAnterior" class="btn mini" type="button">Anterior</button>
+          <span id="paginaInfo">Página 1 de 1</span>
+          <button id="paginaSiguiente" class="btn mini" type="button">Siguiente</button>
+        </div>
+        <p id="tableStatus" class="status" aria-live="polite"></p>
       </section>
     </div>
   </main>
@@ -883,7 +930,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="supabase-config.js"></script>
-  <script src="admin.js?v=velocidad-fotos-3"></script>
+  <script src="admin.js?v=captura-rapida-4"></script>
   <script>
   function aplicarVistaPorRol() {
     const roleEl = document.getElementById("sessionRole");
