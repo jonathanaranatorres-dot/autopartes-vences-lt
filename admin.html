@@ -572,6 +572,108 @@
       .toolbar .btn { flex: 1 1 auto; }
     }
 
+
+    /* ===== CENTRO DE EXPORTACION DE FOTOS ===== */
+    .photo-export-center {
+      margin: 0 0 18px;
+      border: 1px solid rgba(255,176,0,.30);
+      border-radius: 20px;
+      background: linear-gradient(135deg, rgba(255,176,0,.08), rgba(229,59,44,.055), rgba(255,255,255,.025));
+      overflow: hidden;
+    }
+    .photo-export-center > summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 16px;
+      cursor: pointer;
+      list-style: none;
+      user-select: none;
+    }
+    .photo-export-center > summary::-webkit-details-marker { display: none; }
+    .photo-export-title { display: flex; align-items: center; gap: 12px; min-width: 0; }
+    .photo-export-icon {
+      display: grid;
+      place-items: center;
+      width: 42px;
+      height: 42px;
+      flex: 0 0 42px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, #ffd66b, var(--accent-2));
+      color: #171008;
+      font-size: 1.25rem;
+      box-shadow: 0 10px 24px rgba(255,176,0,.16);
+    }
+    .photo-export-copy strong, .photo-export-copy span { display: block; }
+    .photo-export-copy strong { color: #fff3cf; }
+    .photo-export-copy span { margin-top: 3px; color: var(--muted); font-size: .84rem; line-height: 1.35; }
+    .photo-export-chevron { color: #ffe4a0; font-size: 1.2rem; transition: transform .2s ease; }
+    .photo-export-center[open] .photo-export-chevron { transform: rotate(180deg); }
+    .photo-export-body { padding: 0 16px 16px; border-top: 1px solid rgba(255,255,255,.07); }
+    .photo-export-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(150px, 1fr));
+      gap: 12px;
+      padding-top: 16px;
+    }
+    .photo-export-grid .wide { grid-column: span 2; }
+    .photo-export-grid .full { grid-column: 1 / -1; }
+    .photo-export-mode-panel {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(150px, 1fr));
+      gap: 12px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: rgba(8,13,21,.52);
+    }
+    .photo-export-mode-panel[hidden] { display: none !important; }
+    .photo-export-note {
+      margin: 0;
+      padding: 11px 12px;
+      border: 1px solid rgba(46,204,113,.18);
+      border-radius: 14px;
+      color: #dfffea;
+      background: rgba(46,204,113,.055);
+      font-size: .84rem;
+      line-height: 1.45;
+    }
+    .photo-export-options { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
+    .photo-export-options label { display: inline-flex; align-items: center; gap: 8px; color: var(--text); }
+    .photo-export-options input { width: auto; accent-color: var(--ok); }
+    .photo-export-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    .photo-export-progress {
+      position: relative;
+      height: 10px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(0,0,0,.28);
+    }
+    .photo-export-progress > span {
+      display: block;
+      width: 0%;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      transition: width .18s ease;
+    }
+    .export-select-cell { width: 42px; text-align: center; }
+    .export-select-cell input { width: 18px; height: 18px; accent-color: var(--accent-2); cursor: pointer; }
+    tr.export-selected { background: rgba(255,176,0,.055); }
+
+    @media (max-width: 980px) {
+      .photo-export-grid, .photo-export-mode-panel { grid-template-columns: repeat(2, minmax(150px, 1fr)); }
+    }
+    @media (max-width: 560px) {
+      .photo-export-grid, .photo-export-mode-panel { grid-template-columns: 1fr; }
+      .photo-export-grid .wide, .photo-export-grid .full { grid-column: 1; }
+      .photo-export-mode-panel { padding: 12px; }
+      .photo-export-actions .btn { flex: 1 1 100%; }
+    }
+
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
     }
@@ -975,10 +1077,89 @@
           <input id="excelInput" type="file" accept=".xlsx,.xls,.csv" hidden>
         </div>
 
+
+        <details class="photo-export-center admin-only" id="photoExportCenter">
+          <summary>
+            <span class="photo-export-title">
+              <span class="photo-export-icon">📦</span>
+              <span class="photo-export-copy">
+                <strong>Centro de descarga de fotos</strong>
+                <span>Prepara tandas para Mercado Libre sin repetir piezas ni perder tu avance.</span>
+              </span>
+            </span>
+            <span class="photo-export-chevron">⌄</span>
+          </summary>
+          <div class="photo-export-body">
+            <div class="photo-export-grid">
+              <div class="field wide">
+                <label for="photoExportMode">Forma de seleccionar piezas</label>
+                <select id="photoExportMode">
+                  <option value="range">Familia + rango numérico</option>
+                  <option value="exact">IDs específicos</option>
+                  <option value="filtered">Resultados filtrados del Admin</option>
+                  <option value="selected">Selección manual de la tabla</option>
+                </select>
+              </div>
+
+              <div class="photo-export-mode-panel" id="photoExportRangePanel">
+                <div class="field wide">
+                  <label for="photoExportFamily">Familia de inventario</label>
+                  <select id="photoExportFamily"></select>
+                </div>
+                <div class="field">
+                  <label for="photoExportFrom">Desde número</label>
+                  <input id="photoExportFrom" type="number" min="1" step="1" placeholder="1" inputmode="numeric">
+                </div>
+                <div class="field">
+                  <label for="photoExportTo">Hasta número</label>
+                  <input id="photoExportTo" type="number" min="1" step="1" placeholder="20" inputmode="numeric">
+                </div>
+                <p class="photo-export-note wide" id="photoExportLastBatch">Todavía no hay una tanda guardada para esta familia.</p>
+                <div class="photo-export-actions wide">
+                  <button class="btn mini" id="photoExportContinue" type="button">Continuar siguiente tanda</button>
+                  <button class="btn mini ghost-btn" id="photoExportSuggest" type="button">Sugerir 20 piezas</button>
+                </div>
+              </div>
+
+              <div class="photo-export-mode-panel" id="photoExportExactPanel" hidden>
+                <div class="field full">
+                  <label for="photoExportExactIds">IDs a descargar</label>
+                  <textarea id="photoExportExactIds" placeholder="AVC-041, AVC-043, AVI-018&#10;Puedes separarlos con comas, espacios o saltos de línea."></textarea>
+                </div>
+              </div>
+
+              <div class="photo-export-mode-panel" id="photoExportFilteredPanel" hidden>
+                <p class="photo-export-note full" id="photoExportFilteredInfo">Usará las piezas encontradas por la búsqueda y el filtro actual.</p>
+              </div>
+
+              <div class="photo-export-mode-panel" id="photoExportSelectedPanel" hidden>
+                <p class="photo-export-note full" id="photoExportSelectedInfo">0 piezas seleccionadas manualmente.</p>
+                <div class="photo-export-actions full">
+                  <button class="btn mini" id="photoExportSelectFiltered" type="button">Seleccionar resultados filtrados</button>
+                  <button class="btn mini ghost-btn" id="photoExportClearSelection" type="button">Limpiar selección</button>
+                </div>
+              </div>
+
+              <div class="photo-export-options full">
+                <label><input id="photoExportAvailableOnly" type="checkbox" checked> Solo piezas disponibles</label>
+                <label><input id="photoExportIncludeReport" type="checkbox" checked> Incluir reporte y listado CSV</label>
+              </div>
+
+              <div class="photo-export-actions full">
+                <button class="btn gold" id="photoExportDownload" type="button">Descargar tanda en ZIP</button>
+                <span class="photo-export-copy"><span id="photoExportEstimate">Selecciona una opción para calcular la tanda.</span></span>
+              </div>
+              <div class="photo-export-progress full" aria-hidden="true"><span id="photoExportProgressBar"></span></div>
+              <p id="photoExportStatus" class="status full" aria-live="polite"></p>
+            </div>
+          </div>
+        </details>
+
         <div class="table-wrap">
           <table>
             <thead>
               <tr>
+                <th class="export-select-cell admin-only"><input id="photoExportSelectPage" type="checkbox" aria-label="Seleccionar piezas visibles"></th>
                 <th>Fotos</th>
                 <th>ID</th>
                 <th>Pieza</th>
@@ -1029,7 +1210,7 @@
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="supabase-config.js"></script>
   <script src="ai-config.js?v=20260716b"></script>
-  <script src="admin.js?v=captura-rapida-6-ia2"></script>
+  <script src="admin.js?v=exportador-fotos-1"></script>
   <script src="av-ai-admin.js?v=20260716b"></script>
   <script>
   function aplicarVistaPorRol() {
