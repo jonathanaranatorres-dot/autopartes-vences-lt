@@ -13,6 +13,8 @@ let filtroTabla = "";
 let filtroFamilia = "";
 let paginaTabla = 1;
 let temporizadorBusquedaAdmin = null;
+let piezasSeleccionadasExport = new Set();
+let exportacionFotosEnCurso = false;
 const FILAS_POR_PAGINA = 40;
 let usuarioActual = null;
 let perfilActual = null;
@@ -952,8 +954,10 @@ function pintarTabla() {
 
   if (!filtradas.length) {
     paginaTabla = 1;
-    tbody.innerHTML = `<tr><td colspan="8">No hay piezas con ese filtro.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9">No hay piezas con ese filtro.</td></tr>`;
     actualizarPaginacion(0, 0, 0);
+    actualizarCheckboxPaginaExport([]);
+    actualizarResumenExportador();
     setStatus("tableStatus", "Sin resultados. Prueba otra familia o limpia los filtros.", "");
     return;
   }
@@ -974,7 +978,12 @@ function pintarTabla() {
   visibles.forEach((p) => {
     const primeraFoto = p.fotos?.[0]?.url || "";
     const tr = document.createElement("tr");
+    const seleccionadaExport = piezasSeleccionadasExport.has(p.id);
+    if (seleccionadaExport) tr.classList.add("export-selected");
     tr.innerHTML = `
+      <td class="export-select-cell admin-only">
+        <input type="checkbox" data-export-select="${p.id}" aria-label="Seleccionar ${escapeHtml(p.folio || p.pieza || "pieza")}" ${seleccionadaExport ? "checked" : ""}>
+      </td>
       <td>
         <div class="thumbs">
           ${primeraFoto ? `<img src="${escapeHtml(primeraFoto)}" alt="Foto de ${escapeHtml(p.pieza || "pieza")}" loading="lazy" decoding="async">` : ""}
@@ -1004,6 +1013,19 @@ function pintarTabla() {
   tbody.querySelectorAll("button[data-action]").forEach((btn) => {
     btn.addEventListener("click", () => manejarAccionTabla(btn.dataset.action, btn.dataset.id));
   });
+
+  tbody.querySelectorAll("input[data-export-select]").forEach((input) => {
+    input.addEventListener("change", () => {
+      const id = input.dataset.exportSelect;
+      if (input.checked) piezasSeleccionadasExport.add(id);
+      else piezasSeleccionadasExport.delete(id);
+      input.closest("tr")?.classList.toggle("export-selected", input.checked);
+      actualizarResumenExportador();
+      actualizarCheckboxPaginaExport(visibles);
+    });
+  });
+  actualizarCheckboxPaginaExport(visibles);
+  actualizarResumenExportador();
 
   if (typeof aplicarVistaPorRol === "function") {
     aplicarVistaPorRol();
@@ -1123,7 +1145,11 @@ class ZipSinCompresion {
   }
 
   add(nombre, bytes) {
-    const limpio = nombre.replace(/[\\/:*?"<>|]+/g, "-");
+    const limpio = String(nombre || "archivo")
+      .split("/")
+      .filter(Boolean)
+      .map((segmento) => segmento.replace(/[\\:*?"<>|]+/g, "-").replace(/\.+$/g, "").trim() || "archivo")
+      .join("/");
     this.files.push({ nombre: limpio, bytes, crc: crc32(bytes), fecha: new Date() });
   }
 
@@ -1242,6 +1268,396 @@ const tablaCrc32 = (() => {
   }
   return tabla;
 })();
+
+
+/* ===== CENTRO DE EXPORTACION DE FOTOS ===== */
+const EXPORT_BATCH_STORAGE_KEY = "av-photo-export-batches-v1";
+
+function datosUltimasTandasExport() {
+  try {
+    return JSON.parse(localStorage.getItem(EXPORT_BATCH_STORAGE_KEY) || "{}") || {};
+  } catch (_) {
+    return {};
+  }
+}
+
+function guardarUltimaTandaExport(prefijo, desde, hasta) {
+  try {
+    const datos = datosUltimasTandasExport();
+    datos[prefijo] = { desde, hasta, fecha: new Date().toISOString() };
+    localStorage.setItem(EXPORT_BATCH_STORAGE_KEY, JSON.stringify(datos));
+  } catch (error) {
+    console.warn("No se pudo guardar el último rango en este navegador:", error);
+  }
+}
+
+function poblarFamiliasExportador() {
+  const select = $("photoExportFamily");
+  if (!select || select.options.length) return;
+  select.innerHTML = Object.entries(familiasCaptura)
+    .map(([clave, info]) => `<option value="${escapeHtml(info.prefijo)}">${escapeHtml(info.prefijo)} · ${escapeHtml(info.nombre.replace("Autopartes Vences ", ""))}</option>`)
+    .join("");
+}
+
+function modoExportadorActual() {
+  return $("photoExportMode")?.value || "range";
+}
+
+function cambiarModoExportador() {
+  const modo = modoExportadorActual();
+  const paneles = {
+    range: "photoExportRangePanel",
+    exact: "photoExportExactPanel",
+    filtered: "photoExportFilteredPanel",
+    selected: "photoExportSelectedPanel"
+  };
+  Object.entries(paneles).forEach(([clave, id]) => {
+    const panel = $(id);
+    if (panel) panel.hidden = clave !== modo;
+  });
+  actualizarResumenExportador();
+}
+
+function prefijoExportadorActual() {
+  return mayusculas($("photoExportFamily")?.value || "");
+}
+
+function actualizarUltimaTandaExportador() {
+  const prefijo = prefijoExportadorActual();
+  const ultima = datosUltimasTandasExport()[prefijo];
+  const texto = $("photoExportLastBatch");
+  const boton = $("photoExportContinue");
+  if (!texto || !boton) return;
+
+  if (!ultima) {
+    texto.textContent = `Todavía no hay una tanda guardada para ${prefijo || "esta familia"}.`;
+    boton.disabled = true;
+    return;
+  }
+
+  texto.textContent = `Última tanda descargada: ${formatearFolio(prefijo, ultima.desde)} a ${formatearFolio(prefijo, ultima.hasta)}. La siguiente comienza en ${formatearFolio(prefijo, ultima.hasta + 1)}.`;
+  boton.disabled = false;
+}
+
+function sugerirRangoExportador(desdeForzado = null) {
+  const prefijo = prefijoExportadorActual();
+  const ultima = datosUltimasTandasExport()[prefijo];
+  const desde = Math.max(1, Number(desdeForzado ?? (ultima ? ultima.hasta + 1 : 1)) || 1);
+  if ($("photoExportFrom")) $("photoExportFrom").value = desde;
+  if ($("photoExportTo")) $("photoExportTo").value = desde + 19;
+  actualizarResumenExportador();
+}
+
+function idsExactosExportador() {
+  const texto = mayusculas($("photoExportExactIds")?.value || "");
+  return [...new Set(texto.split(/[\s,;]+/).map((id) => id.trim()).filter(Boolean))];
+}
+
+function mapaPiezasPorFolio() {
+  return new Map(piezas.map((pieza) => [mayusculas(pieza.folio), pieza]).filter(([folio]) => folio));
+}
+
+function compararFoliosExport(a, b) {
+  const pa = prefijoDesdeFolio(a.folio);
+  const pb = prefijoDesdeFolio(b.folio);
+  if (pa !== pb) return pa.localeCompare(pb, "es");
+  return numeroDesdeFolio(a.folio, pa) - numeroDesdeFolio(b.folio, pb);
+}
+
+function obtenerSeleccionExportador({ validar = true } = {}) {
+  const modo = modoExportadorActual();
+  const mapa = mapaPiezasPorFolio();
+  let candidatas = [];
+  let solicitados = [];
+  let faltantes = [];
+  let etiqueta = "TANDA";
+  let rango = null;
+
+  if (modo === "range") {
+    const prefijo = prefijoExportadorActual();
+    const desde = Number($("photoExportFrom")?.value || 0);
+    const hasta = Number($("photoExportTo")?.value || 0);
+    if (validar && (!prefijo || !Number.isInteger(desde) || !Number.isInteger(hasta) || desde < 1 || hasta < desde)) {
+      throw new Error("Selecciona una familia y escribe un rango válido. El número final debe ser igual o mayor al inicial.");
+    }
+    if (prefijo && desde >= 1 && hasta >= desde) {
+      if (validar && hasta - desde > 499) throw new Error("Por seguridad, descarga máximo 500 IDs por tanda.");
+      for (let numero = desde; numero <= hasta; numero++) solicitados.push(formatearFolio(prefijo, numero));
+      candidatas = solicitados.map((folio) => mapa.get(folio)).filter(Boolean);
+      faltantes = solicitados.filter((folio) => !mapa.has(folio));
+      etiqueta = `${formatearFolio(prefijo, desde)}_A_${formatearFolio(prefijo, hasta)}`;
+      rango = { prefijo, desde, hasta };
+    }
+  } else if (modo === "exact") {
+    solicitados = idsExactosExportador();
+    if (validar && !solicitados.length) throw new Error("Escribe al menos un ID para descargar.");
+    candidatas = solicitados.map((folio) => mapa.get(folio)).filter(Boolean);
+    faltantes = solicitados.filter((folio) => !mapa.has(folio));
+    etiqueta = `IDS_${solicitados.length}`;
+  } else if (modo === "filtered") {
+    candidatas = piezasFiltradas();
+    etiqueta = `FILTRADAS_${candidatas.length}`;
+    if (validar && !candidatas.length) throw new Error("Los filtros actuales no encontraron piezas.");
+  } else if (modo === "selected") {
+    candidatas = piezas.filter((pieza) => piezasSeleccionadasExport.has(pieza.id));
+    etiqueta = `SELECCIONADAS_${candidatas.length}`;
+    if (validar && !candidatas.length) throw new Error("Marca al menos una pieza en la tabla.");
+  }
+
+  const omitidasVendidas = [];
+  if ($("photoExportAvailableOnly")?.checked) {
+    candidatas = candidatas.filter((pieza) => {
+      if (pieza.disponible) return true;
+      omitidasVendidas.push(pieza.folio || pieza.id);
+      return false;
+    });
+  }
+
+  candidatas = [...new Map(candidatas.map((pieza) => [pieza.id, pieza])).values()].sort(compararFoliosExport);
+  return { modo, candidatas, solicitados, faltantes, omitidasVendidas, etiqueta, rango };
+}
+
+function contarFotosExportables(lista) {
+  return lista.reduce((total, pieza) => total + (pieza.fotos || []).filter((foto) => foto?.url || foto?.storage_path).length, 0);
+}
+
+function actualizarResumenExportador() {
+  poblarFamiliasExportador();
+  actualizarUltimaTandaExportador();
+
+  const seleccionadas = piezas.filter((pieza) => piezasSeleccionadasExport.has(pieza.id)).length;
+  if ($("photoExportSelectedInfo")) $("photoExportSelectedInfo").textContent = `${seleccionadas} pieza(s) seleccionada(s) manualmente.`;
+  const filtradas = piezasFiltradas();
+  if ($("photoExportFilteredInfo")) {
+    const detalle = filtroTabla || filtroFamilia ? "con los filtros actuales" : "sin filtros activos";
+    $("photoExportFilteredInfo").textContent = `Se usarán ${filtradas.length} pieza(s) ${detalle}.`;
+  }
+
+  const salida = $("photoExportEstimate");
+  if (!salida) return;
+  try {
+    const seleccion = obtenerSeleccionExportador({ validar: false });
+    const fotos = contarFotosExportables(seleccion.candidatas);
+    salida.textContent = seleccion.candidatas.length
+      ? `${seleccion.candidatas.length} pieza(s) encontradas · ${fotos} fotografía(s) listas.`
+      : "La selección todavía no contiene piezas descargables.";
+  } catch (_) {
+    salida.textContent = "Completa los datos para calcular la tanda.";
+  }
+}
+
+function actualizarCheckboxPaginaExport(visibles = null) {
+  const checkbox = $("photoExportSelectPage");
+  if (!checkbox) return;
+  const lista = visibles || piezasFiltradas().slice((paginaTabla - 1) * FILAS_POR_PAGINA, paginaTabla * FILAS_POR_PAGINA);
+  const seleccionadas = lista.filter((pieza) => piezasSeleccionadasExport.has(pieza.id)).length;
+  checkbox.checked = Boolean(lista.length) && seleccionadas === lista.length;
+  checkbox.indeterminate = seleccionadas > 0 && seleccionadas < lista.length;
+}
+
+function seleccionarPaginaExportador(marcar) {
+  const lista = piezasFiltradas().slice((paginaTabla - 1) * FILAS_POR_PAGINA, paginaTabla * FILAS_POR_PAGINA);
+  lista.forEach((pieza) => marcar ? piezasSeleccionadasExport.add(pieza.id) : piezasSeleccionadasExport.delete(pieza.id));
+  pintarTabla();
+}
+
+function seleccionarFiltradasExportador() {
+  piezasFiltradas().forEach((pieza) => piezasSeleccionadasExport.add(pieza.id));
+  pintarTabla();
+  setStatus("photoExportStatus", `${piezasSeleccionadasExport.size} pieza(s) quedaron seleccionadas.`, "ok");
+}
+
+function limpiarSeleccionExportador() {
+  piezasSeleccionadasExport.clear();
+  pintarTabla();
+  setStatus("photoExportStatus", "Selección manual limpiada.", "ok");
+}
+
+function nombreSeguroExportador(texto, maximo = 80) {
+  return mayusculas(texto)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[\\/:*?"<>|]+/g, "-")
+    .replace(/\s+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^[_\-.]+|[_\-.]+$/g, "")
+    .slice(0, maximo) || "SIN-DATO";
+}
+
+function carpetaPiezaExportador(pieza) {
+  const partes = [pieza.folio || pieza.id?.slice(0, 8), pieza.pieza, pieza.marca, pieza.modelo, pieza.anio].filter(Boolean);
+  return nombreSeguroExportador(partes.join("__"), 150);
+}
+
+function escaparCsv(valor) {
+  const texto = String(valor ?? "");
+  return /[",\n\r]/.test(texto) ? `"${texto.replaceAll('"', '""')}"` : texto;
+}
+
+function listadoCsvExportador(registros) {
+  const encabezados = ["ID", "Pieza", "Marca", "Modelo", "Año", "Precio", "Disponible", "Fotos", "Carpeta"];
+  const filas = registros.map(({ pieza, carpeta, fotos }) => [
+    pieza.folio || pieza.id,
+    pieza.pieza || "",
+    pieza.marca || "",
+    pieza.modelo || "",
+    pieza.anio || "",
+    pieza.precio || "",
+    pieza.disponible ? "SI" : "NO",
+    fotos,
+    carpeta
+  ]);
+  return "\uFEFF" + [encabezados, ...filas].map((fila) => fila.map(escaparCsv).join(",")).join("\r\n");
+}
+
+function reporteExportador({ seleccion, registros, sinFotos, errores, fecha }) {
+  const lineas = [
+    "AUTOPARTES VENCES - REPORTE DE DESCARGA DE FOTOS",
+    `Fecha: ${fecha.toLocaleString("es-MX")}`,
+    `Modo: ${seleccion.modo}`,
+    `Piezas incluidas: ${registros.length}`,
+    `Fotografías incluidas: ${registros.reduce((total, item) => total + item.fotos, 0)}`,
+    ""
+  ];
+  if (seleccion.solicitados.length) lineas.push(`IDs solicitados: ${seleccion.solicitados.join(", ")}`, "");
+  if (seleccion.faltantes.length) lineas.push("IDs que no existen:", ...seleccion.faltantes.map((id) => `- ${id}`), "");
+  if (seleccion.omitidasVendidas.length) lineas.push("Piezas omitidas por estar vendidas/no disponibles:", ...seleccion.omitidasVendidas.map((id) => `- ${id}`), "");
+  if (sinFotos.length) lineas.push("Piezas sin fotografías:", ...sinFotos.map((id) => `- ${id}`), "");
+  if (errores.length) lineas.push("Errores al descargar fotografías:", ...errores.map((item) => `- ${item.id} foto ${item.numero}: ${item.error}`), "");
+  lineas.push("Carpetas incluidas:", ...registros.map((item) => `- ${item.pieza.folio || item.pieza.id}: ${item.carpeta} (${item.fotos} foto(s))`));
+  return lineas.join("\r\n");
+}
+
+function setProgresoExportador(actual, total) {
+  const porcentaje = total ? Math.round((actual / total) * 100) : 0;
+  if ($("photoExportProgressBar")) $("photoExportProgressBar").style.width = `${porcentaje}%`;
+}
+
+async function descargarTandaFotosZip() {
+  if (exportacionFotosEnCurso) return;
+  let seleccion;
+  try {
+    seleccion = obtenerSeleccionExportador({ validar: true });
+  } catch (error) {
+    setStatus("photoExportStatus", error.message, "err");
+    return;
+  }
+
+  if (!seleccion.candidatas.length) {
+    setStatus("photoExportStatus", "No quedaron piezas disponibles dentro de esa selección.", "err");
+    return;
+  }
+
+  const totalFotos = contarFotosExportables(seleccion.candidatas);
+  if (!totalFotos) {
+    setStatus("photoExportStatus", "Las piezas encontradas todavía no tienen fotografías.", "err");
+    return;
+  }
+
+  const advertencias = [];
+  if (seleccion.faltantes.length) advertencias.push(`${seleccion.faltantes.length} ID(s) no existen`);
+  if (seleccion.omitidasVendidas.length) advertencias.push(`${seleccion.omitidasVendidas.length} pieza(s) vendidas se omitirán`);
+  if (seleccion.modo === "filtered" && !filtroTabla && !filtroFamilia) advertencias.push("no hay filtros activos y se tomarán todas las piezas disponibles");
+  if (totalFotos > 250) advertencias.push("es una tanda grande y puede usar bastante memoria");
+  const detalleAdvertencia = advertencias.length ? `\n\nAvisos: ${advertencias.join("; ")}.` : "";
+  const confirmar = confirm(`Se preparará un ZIP con ${seleccion.candidatas.length} pieza(s) y ${totalFotos} fotografía(s).${detalleAdvertencia}\n\n¿Continuar?`);
+  if (!confirmar) return;
+
+  exportacionFotosEnCurso = true;
+  const boton = $("photoExportDownload");
+  if (boton) boton.disabled = true;
+  setProgresoExportador(0, totalFotos);
+  setStatus("photoExportStatus", "Preparando estructura de carpetas...");
+
+  const zip = new ZipSinCompresion();
+  const registros = [];
+  const sinFotos = [];
+  const errores = [];
+  let procesadas = 0;
+
+  try {
+    for (const pieza of seleccion.candidatas) {
+      const fotos = (pieza.fotos || []).filter((foto) => foto?.url || foto?.storage_path);
+      const carpeta = carpetaPiezaExportador(pieza);
+      if (!fotos.length) {
+        sinFotos.push(pieza.folio || pieza.id);
+        continue;
+      }
+
+      let agregadas = 0;
+      for (let indice = 0; indice < fotos.length; indice++) {
+        const foto = fotos[indice];
+        setStatus("photoExportStatus", `Descargando ${pieza.folio || pieza.pieza}: foto ${indice + 1} de ${fotos.length} · ${procesadas + 1}/${totalFotos}`);
+        try {
+          const blob = await obtenerBlobFoto(foto);
+          const extension = extensionFoto(foto, blob.type);
+          const etiqueta = indice === 0 ? "_PORTADA" : "";
+          const nombreFoto = `${nombreSeguroExportador(pieza.folio || "PIEZA", 45)}_${String(indice + 1).padStart(2, "0")}${etiqueta}.${extension}`;
+          zip.add(`${carpeta}/${nombreFoto}`, new Uint8Array(await blob.arrayBuffer()));
+          agregadas += 1;
+        } catch (error) {
+          console.warn("No se pudo descargar una foto para el ZIP:", error);
+          errores.push({ id: pieza.folio || pieza.id, numero: indice + 1, error: error.message || String(error) });
+        }
+        procesadas += 1;
+        setProgresoExportador(procesadas, totalFotos);
+      }
+      if (agregadas) registros.push({ pieza, carpeta, fotos: agregadas });
+    }
+
+    if (!registros.length) throw new Error("Ninguna fotografía pudo agregarse al ZIP.");
+
+    if ($("photoExportIncludeReport")?.checked) {
+      const fecha = new Date();
+      zip.add("REPORTE-DE-DESCARGA.txt", new TextEncoder().encode(reporteExportador({ seleccion, registros, sinFotos, errores, fecha })));
+      zip.add("LISTADO-DE-PIEZAS.csv", new TextEncoder().encode(listadoCsvExportador(registros)));
+    }
+
+    setStatus("photoExportStatus", "Empaquetando el ZIP...");
+    const archivo = zip.blob();
+    descargarBlob(archivo, `MERCADO-LIBRE_${nombreSeguroExportador(seleccion.etiqueta, 90)}_${new Date().toISOString().slice(0, 10)}.zip`);
+
+    if (seleccion.rango) {
+      guardarUltimaTandaExport(seleccion.rango.prefijo, seleccion.rango.desde, seleccion.rango.hasta);
+      actualizarUltimaTandaExportador();
+    }
+
+    const resumenErrores = errores.length ? ` ${errores.length} foto(s) fallaron y quedaron anotadas en el reporte.` : "";
+    setStatus("photoExportStatus", `ZIP listo: ${registros.length} carpeta(s) y ${registros.reduce((total, item) => total + item.fotos, 0)} foto(s).${resumenErrores}`, errores.length ? "" : "ok");
+    setProgresoExportador(totalFotos, totalFotos);
+  } catch (error) {
+    console.error("Error preparando ZIP de fotos:", error);
+    setStatus("photoExportStatus", "No se pudo crear el ZIP: " + error.message, "err");
+  } finally {
+    exportacionFotosEnCurso = false;
+    if (boton) boton.disabled = false;
+    actualizarResumenExportador();
+  }
+}
+
+function registrarEventosExportadorFotos() {
+  poblarFamiliasExportador();
+  $("photoExportMode")?.addEventListener("change", cambiarModoExportador);
+  $("photoExportFamily")?.addEventListener("change", () => {
+    actualizarUltimaTandaExportador();
+    sugerirRangoExportador();
+  });
+  $("photoExportFrom")?.addEventListener("input", actualizarResumenExportador);
+  $("photoExportTo")?.addEventListener("input", actualizarResumenExportador);
+  $("photoExportExactIds")?.addEventListener("input", actualizarResumenExportador);
+  $("photoExportAvailableOnly")?.addEventListener("change", actualizarResumenExportador);
+  $("photoExportContinue")?.addEventListener("click", () => {
+    const ultima = datosUltimasTandasExport()[prefijoExportadorActual()];
+    sugerirRangoExportador(ultima ? ultima.hasta + 1 : 1);
+  });
+  $("photoExportSuggest")?.addEventListener("click", () => sugerirRangoExportador(Number($("photoExportFrom")?.value || 1)));
+  $("photoExportDownload")?.addEventListener("click", descargarTandaFotosZip);
+  $("photoExportSelectFiltered")?.addEventListener("click", seleccionarFiltradasExportador);
+  $("photoExportClearSelection")?.addEventListener("click", limpiarSeleccionExportador);
+  $("photoExportSelectPage")?.addEventListener("change", (event) => seleccionarPaginaExportador(event.target.checked));
+  sugerirRangoExportador();
+  cambiarModoExportador();
+}
 
 function editarPieza(p) {
   $("piezaId").value = p.id;
@@ -2130,6 +2546,7 @@ function escapeHtml(value) {
 
 function registrarEventos() {
   configurarCapturaRapida();
+  registrarEventosExportadorFotos();
   $("loginForm").addEventListener("submit", iniciarSesion);
   $("logoutBtn").addEventListener("click", cerrarSesion);
   $("piezaForm").addEventListener("submit", guardarPieza);
@@ -2144,12 +2561,13 @@ function registrarEventos() {
     filtroTabla = event.target.value;
     paginaTabla = 1;
     clearTimeout(temporizadorBusquedaAdmin);
-    temporizadorBusquedaAdmin = setTimeout(pintarTabla, 120);
+    temporizadorBusquedaAdmin = setTimeout(() => { pintarTabla(); actualizarResumenExportador(); }, 120);
   });
   $("familiaAdmin")?.addEventListener("change", (event) => {
     filtroFamilia = event.target.value;
     paginaTabla = 1;
     pintarTabla();
+    actualizarResumenExportador();
   });
   $("limpiarFiltrosAdmin")?.addEventListener("click", () => {
     filtroTabla = "";
@@ -2158,6 +2576,7 @@ function registrarEventos() {
     if ($("searchAdmin")) $("searchAdmin").value = "";
     if ($("familiaAdmin")) $("familiaAdmin").value = "";
     pintarTabla();
+    actualizarResumenExportador();
   });
   $("paginaAnterior")?.addEventListener("click", () => {
     if (paginaTabla <= 1) return;
