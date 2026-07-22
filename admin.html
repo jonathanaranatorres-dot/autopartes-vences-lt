@@ -678,6 +678,278 @@
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
     }
+  
+
+    /* ===== COCKPIT DE CAPTURA: ESTRUCTURA NEUTRA EN MÓVIL ===== */
+    .capture-head,
+    .capture-workspace,
+    .capture-data-stack,
+    .capture-block,
+    .capture-media-stack,
+    .capture-action-dock { display: contents; }
+    .capture-eyebrow,
+    .capture-head-badges { display: none; }
+
+    /* ===== CAPTURA ANCHA SOLO EN COMPUTADORA ===== */
+    @media (min-width: 1041px) {
+      .wrap {
+        width: min(calc(100% - 56px), 1600px);
+        max-width: 1600px;
+      }
+
+      .grid {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 24px;
+        padding-top: 24px;
+      }
+
+      .capture-panel {
+        overflow: visible;
+        padding: 26px;
+        border-color: rgba(255,176,0,.20);
+        background:
+          radial-gradient(circle at 93% 0%, rgba(255,176,0,.085), transparent 27%),
+          linear-gradient(180deg, rgba(255,255,255,.075), rgba(255,255,255,.032)),
+          var(--panel);
+      }
+
+      .capture-head {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 24px;
+        margin-bottom: 18px;
+        padding-bottom: 18px;
+        border-bottom: 1px solid rgba(255,255,255,.08);
+      }
+
+      .capture-head-copy { min-width: 0; }
+      .capture-eyebrow {
+        display: block;
+        margin-bottom: 6px;
+        color: var(--accent-2);
+        font-size: .72rem;
+        font-weight: 950;
+        letter-spacing: .18em;
+      }
+      .capture-head h2 { margin: 0 0 5px; font-size: clamp(1.55rem, 2.2vw, 2.15rem); }
+      .capture-head .hint { margin: 0; max-width: 760px; }
+      .capture-head-badges {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+      .capture-head-badges span {
+        display: inline-flex;
+        align-items: center;
+        min-height: 34px;
+        padding: 8px 11px;
+        border: 1px solid rgba(255,176,0,.22);
+        border-radius: 999px;
+        color: #ffe7a9;
+        background: rgba(255,176,0,.065);
+        font-size: .76rem;
+        font-weight: 850;
+        white-space: nowrap;
+      }
+
+      #piezaForm.form-grid { display: block; }
+      #piezaForm > .ai-shell { margin-bottom: 18px; }
+
+      .capture-workspace {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(360px, 420px);
+        gap: 18px;
+        align-items: start;
+      }
+
+      .capture-data-stack {
+        display: grid;
+        gap: 16px;
+        min-width: 0;
+      }
+
+      .capture-block {
+        position: relative;
+        display: grid;
+        grid-template-columns: repeat(12, minmax(0, 1fr));
+        gap: 14px 16px;
+        min-width: 0;
+        padding: 18px;
+        overflow: hidden;
+        border: 1px solid rgba(255,255,255,.09);
+        border-radius: 20px;
+        background:
+          linear-gradient(150deg, rgba(255,255,255,.052), rgba(255,255,255,.018)),
+          rgba(8,13,21,.50);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.035), 0 16px 36px rgba(0,0,0,.13);
+      }
+
+      .capture-block::after {
+        content: "";
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: 180px;
+        height: 2px;
+        background: linear-gradient(90deg, transparent, var(--accent-2));
+        opacity: .55;
+      }
+
+      .capture-block-main {
+        border-color: rgba(255,176,0,.18);
+        background:
+          radial-gradient(circle at 96% 0%, rgba(255,176,0,.07), transparent 28%),
+          linear-gradient(150deg, rgba(255,255,255,.055), rgba(255,255,255,.018)),
+          rgba(8,13,21,.50);
+      }
+
+      .capture-block .section-title {
+        grid-column: 1 / -1;
+        margin: 0 0 2px;
+        padding: 0 0 12px;
+        border-bottom: 1px solid rgba(255,255,255,.07);
+      }
+
+      .capture-block .field,
+      .capture-block .checkrow { min-width: 0; }
+
+      .capture-family { grid-column: span 3; }
+      .capture-folio { grid-column: span 3; }
+      .capture-price { grid-column: span 2; }
+      .capture-piece { grid-column: span 4; }
+
+      .capture-brand,
+      .capture-model,
+      .capture-year,
+      .capture-side { grid-column: span 3; }
+      .capture-keep-vehicle,
+      .capture-keep-family { grid-column: span 6; }
+
+      .capture-color { grid-column: span 3; }
+      .capture-condition { grid-column: span 3; }
+      .capture-part-number { grid-column: span 4; }
+      .capture-available { grid-column: span 2; }
+      .capture-notes { grid-column: 1 / -1; }
+
+      .capture-block input,
+      .capture-block select,
+      .capture-block textarea { min-height: 48px; }
+      .capture-block textarea { min-height: 92px; }
+      .capture-folio .btn { min-height: 36px; }
+
+      .capture-media-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        min-width: 0;
+        padding: 18px;
+        border: 1px solid rgba(255,176,0,.18);
+        border-radius: 22px;
+        background:
+          radial-gradient(circle at 100% 0%, rgba(229,59,44,.10), transparent 31%),
+          linear-gradient(180deg, rgba(255,176,0,.055), rgba(255,255,255,.018)),
+          rgba(8,13,21,.62);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.04), 0 18px 42px rgba(0,0,0,.16);
+      }
+
+      .capture-media-stack > .section-title {
+        margin: 0;
+        padding: 0 0 12px;
+        border-bottom: 1px solid rgba(255,255,255,.08);
+      }
+
+      .capture-media-stack .remote-camera-shell,
+      .capture-media-stack .dropzone,
+      .capture-media-stack .preview { grid-column: auto; }
+
+      .capture-media-stack .remote-camera-shell {
+        border-radius: 18px;
+        background: linear-gradient(145deg, rgba(255,176,0,.095), rgba(229,59,44,.045));
+      }
+      .capture-media-stack .remote-camera-body {
+        grid-template-columns: 1fr;
+        gap: 14px;
+      }
+      .capture-media-stack .remote-camera-session { width: 100%; min-width: 0; }
+      .capture-media-stack .remote-camera-actions .btn { flex: 1 1 150px; }
+      .capture-media-stack .remote-camera-qr {
+        width: min(100%, 250px);
+        min-height: 230px;
+        margin-inline: auto;
+      }
+
+      .capture-media-stack .dropzone {
+        min-height: 112px;
+        padding: 16px;
+        border-radius: 17px;
+      }
+      .capture-media-stack .dropzone::before { font-size: 1.55rem; margin-bottom: 4px; }
+      .capture-media-stack .preview {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+      .capture-media-stack .preview-card { border-radius: 15px; }
+      .capture-media-stack .preview-actions { grid-template-columns: repeat(2, 1fr); }
+
+      .capture-action-dock {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        margin-top: 18px;
+        padding: 13px 14px;
+        border: 1px solid rgba(255,176,0,.26);
+        border-radius: 18px;
+        background: rgba(10,14,22,.88);
+        box-shadow: 0 18px 48px rgba(0,0,0,.36), inset 0 1px 0 rgba(255,255,255,.06);
+        backdrop-filter: blur(18px) saturate(1.2);
+      }
+      .capture-action-dock .form-actions { flex-wrap: nowrap; }
+      .capture-action-dock #saveBtn {
+        min-width: 270px;
+        min-height: 50px;
+        font-size: .96rem;
+        box-shadow: 0 16px 34px rgba(229,59,44,.28);
+      }
+      .capture-action-dock .capture-shortcuts {
+        margin: 0;
+        text-align: right;
+      }
+      .capture-panel > .status {
+        margin: 12px 4px 0;
+        padding: 0 4px;
+      }
+    }
+
+    @media (min-width: 1041px) and (max-width: 1279px) {
+      .capture-workspace { grid-template-columns: minmax(0, 1fr); }
+      .capture-media-stack { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(300px, .85fr); }
+      .capture-media-stack > .section-title { grid-column: 1 / -1; }
+      .capture-media-stack .remote-camera-shell { grid-column: 1; grid-row: 2 / span 2; }
+      .capture-media-stack .dropzone { grid-column: 2; }
+      .capture-media-stack .preview { grid-column: 2; }
+    }
+
+    @media (min-width: 1280px) and (max-width: 1450px) {
+      .capture-workspace { grid-template-columns: minmax(0, 1fr) minmax(340px, 380px); }
+      .capture-family,
+      .capture-folio,
+      .capture-piece { grid-column: span 4; }
+      .capture-price { grid-column: span 4; }
+      .capture-brand,
+      .capture-model,
+      .capture-year,
+      .capture-side { grid-column: span 6; }
+      .capture-color,
+      .capture-condition,
+      .capture-part-number { grid-column: span 4; }
+      .capture-available { grid-column: 1 / -1; }
+    }
+
   </style>
 </head>
 <body>
@@ -732,9 +1004,19 @@
     </header>
 
     <div class="wrap grid">
-      <section class="panel admin-only">
-        <h2 id="formTitle">Nueva pieza</h2>
-        <p class="hint">Llena los datos, agrega fotos y acomódalas. La primera foto será la portada del catálogo.</p>
+      <section class="panel admin-only capture-panel">
+        <div class="capture-head">
+          <div class="capture-head-copy">
+            <span class="capture-eyebrow">ESTACIÓN DE CAPTURA</span>
+            <h2 id="formTitle">Nueva pieza</h2>
+            <p class="hint">Llena los datos, agrega fotos y acomódalas. La primera foto será la portada del catálogo.</p>
+          </div>
+          <div class="capture-head-badges" aria-hidden="true">
+            <span>⚡ ID automático</span>
+            <span>📱 Cámara enlazada</span>
+            <span>↗ Captura continua</span>
+          </div>
+        </div>
 
         <form id="piezaForm" class="form-grid">
           <input type="hidden" id="piezaId">
@@ -787,9 +1069,12 @@
             </div>
           </details>
 
+          <div class="capture-workspace">
+            <div class="capture-data-stack">
+              <section class="capture-block capture-block-main">
           <div class="section-title"><span>01</span> Datos principales</div>
 
-          <div class="field">
+          <div class="field capture-family">
             <label for="familiaCaptura">Familia / prefijo</label>
             <select id="familiaCaptura">
               <option value="">Seleccionar familia</option>
@@ -808,19 +1093,19 @@
             </select>
           </div>
 
-          <div class="field">
+          <div class="field capture-folio">
             <label for="folio">ID / Folio</label>
             <input id="folio" placeholder="Se genera al elegir familia" autocomplete="off">
             <button class="btn mini" id="generarFolioBtn" type="button">Generar siguiente ID</button>
             <small id="folioAyuda" class="hint"></small>
           </div>
 
-          <div class="field">
+          <div class="field capture-price">
             <label for="precio">Precio</label>
             <input id="precio" type="number" min="0" step="1" placeholder="1300">
           </div>
 
-          <div class="field full">
+          <div class="field full capture-piece">
             <label for="pieza">Pieza *</label>
             <input id="pieza" list="listaPiezas" required placeholder="PUERTA DELANTERA">
             <datalist id="listaPiezas">
@@ -863,9 +1148,12 @@
             </datalist>
           </div>
 
+              </section>
+
+              <section class="capture-block capture-block-vehicle">
           <div class="section-title"><span>02</span> Vehículo compatible</div>
 
-          <div class="field">
+          <div class="field capture-brand">
             <label for="marca">Marca</label>
             <input id="marca" list="listaMarcas" placeholder="CHEVROLET">
             <datalist id="listaMarcas">
@@ -892,19 +1180,19 @@
             </datalist>
           </div>
 
-          <div class="field">
+          <div class="field capture-model">
             <label for="modelo">Modelo</label>
             <input id="modelo" list="listaModelos" placeholder="BEAT" autocomplete="off">
             <datalist id="listaModelos"></datalist>
           </div>
 
-          <div class="field">
+          <div class="field capture-year">
             <label for="anio">Año</label>
             <input id="anio" list="listaAnios" placeholder="2014-2021" autocomplete="off">
             <datalist id="listaAnios"></datalist>
           </div>
 
-          <div class="field">
+          <div class="field capture-side">
             <label for="lado">Lado</label>
             <select id="lado">
               <option value="">N/C</option>
@@ -921,25 +1209,28 @@
             </select>
           </div>
 
-          <label class="field full checkrow">
+          <label class="field full checkrow capture-keep-vehicle">
             <span>Mantener marca, modelo y año al guardar la siguiente pieza</span>
             <input id="mantenerVehiculo" type="checkbox" checked>
           </label>
 
-          <label class="field full checkrow">
+          <label class="field full checkrow capture-keep-family">
             <span>Mantener también la familia para capturar varias piezas del mismo grupo</span>
             <input id="mantenerFamilia" type="checkbox">
           </label>
 
+              </section>
+
+              <section class="capture-block capture-block-details">
           <div class="section-title"><span>03</span> Detalles de la pieza</div>
 
-          <div class="field">
+          <div class="field capture-color">
             <label for="color">Color</label>
             <input id="color" list="listaColores" placeholder="BLANCO" autocomplete="off">
             <datalist id="listaColores"></datalist>
           </div>
 
-          <div class="field">
+          <div class="field capture-condition">
             <label for="estado">Estado / condición</label>
             <select id="estado">
               <option value="USADO ORIGINAL" selected>USADO ORIGINAL</option>
@@ -952,21 +1243,25 @@
             </select>
           </div>
 
-          <div class="field full">
+          <div class="field full capture-part-number">
             <label for="numeroParte">Número de parte</label>
             <input id="numeroParte" placeholder="Si tiene etiqueta o código">
           </div>
 
-          <div class="field full">
+          <div class="field full capture-notes">
             <label for="descripcion">Observaciones</label>
             <textarea id="descripcion" placeholder="Detalles, daños, incluye conectores, compatibilidad pendiente, etc."></textarea>
           </div>
 
-          <label class="field full checkrow">
+          <label class="field full checkrow capture-available">
             <span>Publicar como disponible</span>
             <input id="disponible" type="checkbox" checked>
           </label>
 
+              </section>
+            </div>
+
+            <aside class="capture-media-stack">
           <div class="section-title"><span>04</span> Fotos y publicación</div>
 
           <details id="remoteCameraShell" class="remote-camera-shell">
@@ -1007,12 +1302,16 @@
           </div>
 
           <div id="preview" class="preview"></div>
-
-          <div class="form-actions">
-            <button class="btn primary" id="saveBtn" type="submit">Guardar y capturar siguiente</button>
-            <button class="btn" id="resetBtn" type="button">Limpiar</button>
+            </aside>
           </div>
-          <p class="capture-shortcuts">Atajo de captura: <kbd>Ctrl</kbd> + <kbd>Enter</kbd> o <kbd>Ctrl</kbd> + <kbd>S</kbd></p>
+
+          <div class="capture-action-dock">
+            <div class="form-actions">
+              <button class="btn primary" id="saveBtn" type="submit">Guardar y capturar siguiente</button>
+              <button class="btn" id="resetBtn" type="button">Limpiar</button>
+            </div>
+            <p class="capture-shortcuts">Atajo de captura: <kbd>Ctrl</kbd> + <kbd>Enter</kbd> o <kbd>Ctrl</kbd> + <kbd>S</kbd></p>
+          </div>
         </form>
         <p id="formStatus" class="status" aria-live="polite"></p>
       </section>
