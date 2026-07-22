@@ -7,6 +7,7 @@
   <meta name="robots" content="noindex, nofollow">
   <link rel="preconnect" href="https://cdn.jsdelivr.net">
   <link rel="stylesheet" href="av-ai.css?v=20260716b">
+  <link rel="stylesheet" href="camara-remota-admin.css?v=20260722">
   <style>
     :root {
       --bg: #07080d;
@@ -722,6 +723,7 @@
             <small id="sessionRole">Verificando usuario</small>
           </div>
           <a class="btn" href="index.html" target="_blank" rel="noopener">Abrir catálogo</a>
+          <a class="btn gold admin-only" href="#remoteCameraShell">Cámara celular</a>
           <button id="optimizeExistingPhotos" class="btn admin-only" type="button" title="Crear miniaturas ligeras sin borrar las fotos grandes">Optimizar fotos</button>
           <button id="exportExcel" class="btn gold admin-only" type="button">Exportar Excel</button>
           <button id="logoutBtn" class="btn danger" type="button">Salir</button>
@@ -967,6 +969,35 @@
 
           <div class="section-title"><span>04</span> Fotos y publicación</div>
 
+          <details id="remoteCameraShell" class="remote-camera-shell">
+            <summary>
+              <span class="remote-camera-summary-copy">
+                <strong>📱 Cámara del celular</strong>
+                <small>Toma las fotos con el teléfono y recíbelas directamente en esta pieza.</small>
+              </span>
+              <span id="remoteCameraBadge" class="remote-camera-badge wait">Apagada</span>
+            </summary>
+            <div class="remote-camera-body">
+              <div class="remote-camera-copy">
+                <p>Activa una sesión, escanea el QR y sigue llenando los datos desde la computadora. Cada foto llegará a la misma bandeja del formulario.</p>
+                <div class="remote-camera-session">
+                  <span>Código temporal</span>
+                  <strong id="remoteSessionCode">------</strong>
+                </div>
+                <div class="remote-camera-actions">
+                  <button id="remoteCameraStart" class="btn gold" type="button">Activar cámara</button>
+                  <button id="remoteCameraNewCode" class="btn" type="button" disabled>Nuevo código</button>
+                  <button id="remoteCameraCopyLink" class="btn" type="button" disabled>Copiar liga</button>
+                </div>
+                <p id="remoteCameraStatus" class="remote-camera-status">Todavía no hay una sesión activa.</p>
+                <p class="remote-camera-note">Las fotos no se publican solas. Primero aparecen abajo para que las ordenes y después se guardan con el botón normal del admin.</p>
+              </div>
+              <div id="remoteCameraQr" class="remote-camera-qr" aria-label="Código QR para abrir la cámara en el celular">
+                <span>Activa la cámara para generar el QR.</span>
+              </div>
+            </div>
+          </details>
+
           <div id="dropzone" class="dropzone">
             <div>
               <strong>Arrastra fotos aquí</strong>
@@ -1211,6 +1242,7 @@
   <script src="supabase-config.js"></script>
   <script src="ai-config.js?v=20260716b"></script>
   <script src="admin.js?v=exportador-fotos-1"></script>
+  <script src="camara-remota-admin.js?v=20260722"></script>
   <script src="av-ai-admin.js?v=20260716b"></script>
   <script>
   function aplicarVistaPorRol() {
