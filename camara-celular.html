@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="es-MX">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Cámara móvil | AUTOPARTES VENCES</title>
+  <link rel="stylesheet" href="estilos.css?v=20260722">
+</head>
+<body>
+  <main class="phone-shell">
+    <header class="topbar">
+      <div class="brand">
+        <img src="imagenes/logo-vences.jpeg" alt="Logo AUTOPARTES VENCES">
+        <div><strong>CÁMARA VENCES</strong><span>Captura móvil oficial</span></div>
+      </div>
+      <span id="connectionBadge" class="badge wait">Sin conectar</span>
+    </header>
+
+    <section class="card phone-card">
+      <p class="eyebrow">Celular</p>
+      <h1>Fotografía la pieza</h1>
+      <p class="lead">Escanea el QR del admin. Las fotos llegarán directamente a la pieza que estás capturando en la computadora.</p>
+
+      <div class="field">
+        <label for="sessionInput">Código de la computadora</label>
+        <input id="sessionInput" class="code-input" maxlength="6" inputmode="text" autocomplete="off" placeholder="ABC123">
+      </div>
+      <button id="connectBtn" class="btn primary big" type="button">Conectar con computadora</button>
+      <p id="connectionStatus" class="status-line">Abre la cámara desde el QR del admin.</p>
+
+      <div id="cameraPanel" class="camera-panel hidden">
+        <div id="preview" class="camera-preview">La última foto aparecerá aquí.</div>
+        <div class="counter" id="photoCounter">0</div>
+        <p class="muted" style="text-align:center">fotos dentro de la pieza actual</p>
+        <div class="progress" aria-label="Progreso de envío"><span id="progressBar"></span></div>
+        <p id="cameraStatus" class="status-line">Listo para fotografiar.</p>
+
+        <input id="cameraInput" type="file" accept="image/*" capture="environment" hidden>
+        <input id="galleryInput" type="file" accept="image/*" hidden>
+        <button id="takePhotoBtn" class="btn primary big" type="button">📷 Tomar foto</button>
+        <div class="actions">
+          <button id="choosePhotoBtn" class="btn" type="button">Elegir de galería</button>
+          <button id="disconnectBtn" class="btn danger" type="button">Desconectar</button>
+        </div>
+      </div>
+
+      <div class="notice">La computadora conserva el control: ahí ordenas las fotos, eliges portada y guardas la pieza. El teléfono solo funciona como cámara.</div>
+    </section>
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.5/peerjs.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="camara-celular.js?v=20260722"></script>
+</body>
+</html>

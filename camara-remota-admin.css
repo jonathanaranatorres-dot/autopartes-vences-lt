@@ -1,0 +1,99 @@
+.remote-camera-shell {
+  grid-column: 1 / -1;
+  border: 1px solid rgba(255,176,0,.28);
+  border-radius: 18px;
+  background: linear-gradient(145deg, rgba(255,176,0,.08), rgba(229,59,44,.055));
+  overflow: hidden;
+}
+.remote-camera-shell[open] { box-shadow: inset 0 1px 0 rgba(255,255,255,.04); }
+.remote-camera-shell > summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 15px 16px;
+  cursor: pointer;
+  user-select: none;
+}
+.remote-camera-shell > summary::-webkit-details-marker { display: none; }
+.remote-camera-summary-copy { display: grid; gap: 3px; }
+.remote-camera-summary-copy strong { color: #fff0c2; }
+.remote-camera-summary-copy small { color: var(--muted); line-height: 1.35; }
+.remote-camera-badge {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 7px 10px;
+  color: var(--muted);
+  background: rgba(0,0,0,.18);
+  font-size: .82rem;
+  font-weight: 800;
+}
+.remote-camera-badge::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 12px currentColor;
+}
+.remote-camera-badge.wait { color: var(--accent-2); }
+.remote-camera-badge.ok { color: var(--ok); }
+.remote-camera-badge.err { color: var(--danger); }
+.remote-camera-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 210px;
+  gap: 18px;
+  padding: 0 16px 16px;
+}
+.remote-camera-copy > p { margin: 0 0 12px; color: #c9d3df; line-height: 1.5; }
+.remote-camera-session {
+  display: inline-grid;
+  gap: 2px;
+  min-width: 210px;
+  padding: 12px 15px;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 15px;
+  background: rgba(2,5,9,.4);
+}
+.remote-camera-session span { color: var(--muted); font-size: .78rem; }
+.remote-camera-session strong {
+  color: var(--accent-2);
+  font-size: clamp(1.7rem, 4vw, 2.5rem);
+  letter-spacing: .13em;
+}
+.remote-camera-actions { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 12px; }
+.remote-camera-status { min-height: 22px; margin-top: 12px !important; color: var(--muted) !important; }
+.remote-camera-status.ok { color: var(--ok) !important; }
+.remote-camera-status.err { color: var(--danger) !important; }
+.remote-camera-note {
+  margin-bottom: 0 !important;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(46,204,113,.18);
+  background: rgba(46,204,113,.06);
+  color: #bdeacb !important;
+  font-size: .86rem;
+}
+.remote-camera-qr {
+  min-height: 210px;
+  display: grid;
+  place-items: center;
+  padding: 12px;
+  border-radius: 16px;
+  background: #fff;
+  color: #151515;
+  text-align: center;
+  font-size: .84rem;
+}
+.remote-camera-qr img,
+.remote-camera-qr canvas { max-width: 100%; height: auto !important; }
+@media (max-width: 700px) {
+  .remote-camera-body { grid-template-columns: 1fr; }
+  .remote-camera-qr { width: min(100%, 230px); min-height: 0; }
+  .remote-camera-actions .btn { flex: 1 1 150px; }
+}
