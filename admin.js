@@ -2132,6 +2132,268 @@ async function optimizarFotosExistentes() {
   setStatus("tableStatus", `Optimización terminada: ${correctas} miniatura(s) creadas${fallidas ? ` y ${fallidas} pendiente(s)` : ""}.`, tipo);
 }
 
+
+function formatearPesoArchivo(bytes) {
+  const valor = Number(bytes || 0);
+  if (valor < 1024) return `${valor} B`;
+  if (valor < 1024 * 1024) return `${(valor / 1024).toFixed(0)} KB`;
+  return `${(valor / 1024 / 1024).toFixed(2)} MB`;
+}
+
+async function datosImagenBlob(blob) {
+  const bitmap = await createImageBitmap(blob);
+  try {
+    return {
+      ancho: bitmap.width,
+      alto: bitmap.height,
+      bytes: blob.size
+    };
+  } finally {
+    bitmap.close?.();
+  }
+}
+
+function asegurarEstilosPruebaCompresion() {
+  if (document.getElementById("avPhotoTestStyles")) return;
+  const style = document.createElement("style");
+  style.id = "avPhotoTestStyles";
+  style.textContent = `
+    .av-photo-test-overlay {
+      position: fixed; inset: 0; z-index: 99999; padding: 22px;
+      display: grid; place-items: center; overflow: auto;
+      background: rgba(3, 7, 12, .86); backdrop-filter: blur(8px);
+    }
+    .av-photo-test-card {
+      width: min(1120px, 100%); border: 1px solid rgba(255,255,255,.14);
+      border-radius: 24px; background: #111820; color: #f6f8fb;
+      box-shadow: 0 30px 90px rgba(0,0,0,.55); overflow: hidden;
+    }
+    .av-photo-test-head { padding: 22px 24px; border-bottom: 1px solid rgba(255,255,255,.10); }
+    .av-photo-test-head h2 { margin: 0 0 8px; font-size: clamp(22px, 3vw, 32px); }
+    .av-photo-test-head p { margin: 0; color: #aeb9c6; }
+    .av-photo-test-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 18px; padding: 22px; }
+    .av-photo-test-panel { border: 1px solid rgba(255,255,255,.10); border-radius: 18px; overflow: hidden; background: #0b1118; }
+    .av-photo-test-panel img { width: 100%; aspect-ratio: 4 / 3; display: block; object-fit: contain; background: #05080c; }
+    .av-photo-test-meta { padding: 15px; display: grid; gap: 7px; }
+    .av-photo-test-meta strong { font-size: 18px; }
+    .av-photo-test-meta span { color: #aeb9c6; }
+    .av-photo-test-summary { margin: 0 22px 22px; padding: 16px 18px; border-radius: 16px; background: rgba(33, 197, 112, .10); border: 1px solid rgba(33, 197, 112, .28); }
+    .av-photo-test-actions { display: flex; flex-wrap: wrap; gap: 10px; padding: 0 22px 22px; }
+    .av-photo-test-actions a, .av-photo-test-actions button {
+      appearance: none; border: 1px solid rgba(255,255,255,.16); border-radius: 12px;
+      padding: 11px 15px; background: #1a2530; color: #fff; font: inherit;
+      font-weight: 800; text-decoration: none; cursor: pointer;
+    }
+    .av-photo-test-actions button { background: #d39c32; color: #111; border-color: transparent; }
+    @media (max-width: 760px) { .av-photo-test-grid { grid-template-columns: 1fr; } }
+  `;
+  document.head.appendChild(style);
+}
+
+function urlPublicaStorageAdmin(path) {
+  const limpio = String(path || "").replace(/^\/+/, "");
+  if (!limpio) return "";
+  return avDB.storage.from(bucket).getPublicUrl(limpio).data.publicUrl;
+}
+
+async function limpiarArchivosPrueba(paths) {
+  const unicos = [...new Set((paths || []).filter(Boolean))];
+  if (!unicos.length) return;
+  const { error } = await avDB.storage.from(bucket).remove(unicos);
+  if (error) throw error;
+}
+
+function mostrarComparacionCompresion({ pieza, fotoNumero, originalUrl, comprimidaUrl, miniaturaUrl, originalInfo, comprimidaInfo, miniaturaInfo, pathsPrueba, boton }) {
+  asegurarEstilosPruebaCompresion();
+  document.querySelector(".av-photo-test-overlay")?.remove();
+
+  const ahorro = originalInfo.bytes > 0
+    ? Math.max(0, Math.round((1 - comprimidaInfo.bytes / originalInfo.bytes) * 100))
+    : 0;
+
+  const overlay = document.createElement("div");
+  overlay.className = "av-photo-test-overlay";
+  overlay.innerHTML = `
+    <section class="av-photo-test-card" role="dialog" aria-modal="true" aria-label="Comparación de compresión">
+      <div class="av-photo-test-head">
+        <h2>Prueba segura terminada</h2>
+        <p>${escapeHtml(pieza.folio || pieza.pieza || pieza.id)} · foto ${fotoNumero}. No se cambió la base de datos ni la página pública.</p>
+      </div>
+      <div class="av-photo-test-grid">
+        <article class="av-photo-test-panel">
+          <img src="${escapeHtml(originalUrl)}" alt="Fotografía original">
+          <div class="av-photo-test-meta">
+            <strong>Original intacta</strong>
+            <span>${escapeHtml(formatearPesoArchivo(originalInfo.bytes))} · ${originalInfo.ancho} × ${originalInfo.alto}px</span>
+          </div>
+        </article>
+        <article class="av-photo-test-panel">
+          <img src="${escapeHtml(comprimidaUrl)}" alt="Fotografía comprimida de prueba">
+          <div class="av-photo-test-meta">
+            <strong>Versión comprimida de prueba</strong>
+            <span>${escapeHtml(formatearPesoArchivo(comprimidaInfo.bytes))} · ${comprimidaInfo.ancho} × ${comprimidaInfo.alto}px</span>
+            <span>Miniatura: ${escapeHtml(formatearPesoArchivo(miniaturaInfo.bytes))} · ${miniaturaInfo.ancho} × ${miniaturaInfo.alto}px</span>
+          </div>
+        </article>
+      </div>
+      <div class="av-photo-test-summary">
+        <strong>Ahorro estimado en la foto grande: ${ahorro}%.</strong>
+        Revisa daños, letras, etiquetas y número de parte. La original sigue en su ruta y el inventario no fue modificado.
+      </div>
+      <div class="av-photo-test-actions">
+        <a href="${escapeHtml(originalUrl)}" target="_blank" rel="noopener">Abrir original</a>
+        <a href="${escapeHtml(comprimidaUrl)}" target="_blank" rel="noopener">Abrir comprimida</a>
+        <a href="${escapeHtml(miniaturaUrl)}" target="_blank" rel="noopener">Abrir miniatura</a>
+        <button type="button" data-close-test>Cerrar y borrar archivos de prueba</button>
+      </div>
+    </section>
+  `;
+  document.body.appendChild(overlay);
+
+  const cerrar = async () => {
+    const cerrarBtn = overlay.querySelector("[data-close-test]");
+    if (cerrarBtn) {
+      cerrarBtn.disabled = true;
+      cerrarBtn.textContent = "Borrando prueba temporal...";
+    }
+    try {
+      await limpiarArchivosPrueba(pathsPrueba);
+      setStatus("tableStatus", "Prueba cerrada. Los archivos temporales fueron eliminados y el inventario quedó intacto.", "ok");
+    } catch (error) {
+      console.warn("No se pudieron borrar todos los archivos temporales:", error);
+      setStatus("tableStatus", "La prueba no cambió el inventario, pero no se pudo borrar algún archivo temporal. Avísame antes de continuar.", "err");
+    } finally {
+      overlay.remove();
+      if (boton) boton.disabled = false;
+    }
+  };
+
+  overlay.querySelector("[data-close-test]")?.addEventListener("click", cerrar, { once: true });
+}
+
+async function probarCompresionSinCambiarDatos() {
+  if (!esAdminActual()) {
+    setStatus("tableStatus", "Solo un administrador puede ejecutar la prueba segura.", "err");
+    return;
+  }
+
+  const disponibles = piezas.filter((pieza) => (pieza.fotos || []).some((foto) => foto.id && foto.storage_path));
+  if (!disponibles.length) {
+    setStatus("tableStatus", "No encontré fotografías de Supabase disponibles para probar.", "err");
+    return;
+  }
+
+  const entrada = prompt("Escribe el ID o folio exacto de una pieza para probar una sola fotografía. Ejemplo: AVC-001", "");
+  if (entrada === null) return;
+  const buscado = normalizar(entrada);
+  if (!buscado) {
+    setStatus("tableStatus", "Escribe un ID o folio válido.", "err");
+    return;
+  }
+
+  const coincidencias = disponibles.filter((pieza) =>
+    normalizar(pieza.folio) === buscado ||
+    normalizar(pieza.id) === buscado ||
+    normalizar(pieza.id).startsWith(buscado)
+  );
+
+  if (coincidencias.length !== 1) {
+    setStatus(
+      "tableStatus",
+      coincidencias.length
+        ? "Ese dato coincide con más de una pieza. Escribe el folio completo."
+        : "No encontré una pieza con ese folio. Revisa el ID e inténtalo de nuevo.",
+      "err"
+    );
+    return;
+  }
+
+  const pieza = coincidencias[0];
+  const fotosValidas = (pieza.fotos || []).filter((foto) => foto.id && foto.storage_path);
+  const numeroTexto = prompt(`La pieza ${pieza.folio || pieza.pieza} tiene ${fotosValidas.length} foto(s). Escribe cuál quieres probar:`, "1");
+  if (numeroTexto === null) return;
+  const fotoNumero = Number.parseInt(numeroTexto, 10);
+  if (!Number.isInteger(fotoNumero) || fotoNumero < 1 || fotoNumero > fotosValidas.length) {
+    setStatus("tableStatus", `Elige un número entre 1 y ${fotosValidas.length}.`, "err");
+    return;
+  }
+
+  const foto = fotosValidas[fotoNumero - 1];
+  const boton = $("testPhotoOptimization");
+  if (boton) boton.disabled = true;
+  setStatus("tableStatus", `Preparando prueba segura para ${pieza.folio || pieza.pieza}, foto ${fotoNumero}...`);
+
+  const basePrueba = `${pieza.id}/_prueba_segura/${foto.id}`;
+  const posiblesAnteriores = [
+    `${basePrueba}/full.webp`, `${basePrueba}/full.jpg`,
+    `${basePrueba}/thumb.webp`, `${basePrueba}/thumb.jpg`
+  ];
+  let pathsPrueba = [];
+
+  try {
+    await avDB.storage.from(bucket).remove(posiblesAnteriores).catch(() => {});
+
+    const { data: blobOriginal, error: downloadError } = await avDB.storage.from(bucket).download(foto.storage_path);
+    if (downloadError) throw downloadError;
+    if (!blobOriginal) throw new Error("Supabase no devolvió la fotografía original.");
+
+    const nombreOriginal = foto.storage_path.split("/").pop() || `foto-${fotoNumero}.jpg`;
+    const archivoOriginal = new File([blobOriginal], nombreOriginal, { type: blobOriginal.type || "image/jpeg" });
+    const originalInfo = await datosImagenBlob(blobOriginal);
+
+    const comprimida = await crearVersionImagen(archivoOriginal, {
+      maxLado: 1400,
+      calidadInicial: 0.78,
+      tamanoObjetivoKb: 380,
+      sufijo: "prueba-full"
+    });
+    const miniatura = await crearVersionImagen(archivoOriginal, {
+      maxLado: 480,
+      calidadInicial: 0.68,
+      tamanoObjetivoKb: 80,
+      sufijo: "prueba-thumb"
+    });
+
+    const pathComprimida = `${basePrueba}/full.${extensionArchivo(comprimida)}`;
+    const pathMiniatura = `${basePrueba}/thumb.${extensionArchivo(miniatura)}`;
+    pathsPrueba = [pathComprimida, pathMiniatura];
+
+    await subirArchivoStorage(pathComprimida, comprimida, true);
+    await subirArchivoStorage(pathMiniatura, miniatura, true);
+
+    const { data: blobComprimido, error: verifyFullError } = await avDB.storage.from(bucket).download(pathComprimida);
+    if (verifyFullError) throw verifyFullError;
+    const { data: blobMiniatura, error: verifyThumbError } = await avDB.storage.from(bucket).download(pathMiniatura);
+    if (verifyThumbError) throw verifyThumbError;
+
+    const comprimidaInfo = await datosImagenBlob(blobComprimido);
+    const miniaturaInfo = await datosImagenBlob(blobMiniatura);
+    const cacheBust = `v=${Date.now()}`;
+    const originalUrl = `${urlPublicaStorageAdmin(foto.storage_path)}?${cacheBust}`;
+    const comprimidaUrl = `${urlPublicaStorageAdmin(pathComprimida)}?${cacheBust}`;
+    const miniaturaUrl = `${urlPublicaStorageAdmin(pathMiniatura)}?${cacheBust}`;
+
+    setStatus("tableStatus", "Prueba lista. Compara ambas imágenes. No se modificó ningún registro.", "ok");
+    mostrarComparacionCompresion({
+      pieza,
+      fotoNumero,
+      originalUrl,
+      comprimidaUrl,
+      miniaturaUrl,
+      originalInfo,
+      comprimidaInfo,
+      miniaturaInfo,
+      pathsPrueba,
+      boton
+    });
+  } catch (error) {
+    console.error("Error en prueba segura de compresión:", error);
+    try { await limpiarArchivosPrueba(pathsPrueba); } catch (_) {}
+    if (boton) boton.disabled = false;
+    setStatus("tableStatus", "La prueba se detuvo sin cambiar datos: " + (error?.message || String(error)), "err");
+  }
+}
+
 function resetFotosTrabajo() {
   fotosTrabajo.forEach((foto) => {
     if (foto.tipo === "nueva" && foto.url?.startsWith("blob:")) {
@@ -2554,6 +2816,7 @@ function registrarEventos() {
   $("excelInput").addEventListener("change", importarExcel);
   $("exportExcel").addEventListener("click", exportarExcel);
   $("optimizeExistingPhotos")?.addEventListener("click", optimizarFotosExistentes);
+  $("testPhotoOptimization")?.addEventListener("click", probarCompresionSinCambiarDatos);
   $("exportMonthlyCut")?.addEventListener("click", exportarCorteMensual);
   $("clearTrainingSales")?.addEventListener("click", limpiarVentasCapacitacion);
   $("preview").addEventListener("click", manejarAccionPreview);
