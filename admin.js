@@ -2394,6 +2394,497 @@ async function probarCompresionSinCambiarDatos() {
   }
 }
 
+
+const PHOTO_MIGRATION_STORAGE_KEY = "av-photo-migration-safe-v2";
+const PHOTO_MIGRATION_BATCH_SIZE = 100;
+let photoMigrationRunning = false;
+let photoMigrationOverlay = null;
+
+function leerEstadoMigracionFotos() {
+  try {
+    const raw = localStorage.getItem(PHOTO_MIGRATION_STORAGE_KEY);
+    if (!raw) return null;
+    const estado = JSON.parse(raw);
+    if (!estado || estado.version !== 2 || !Array.isArray(estado.items)) return null;
+    return estado;
+  } catch (error) {
+    console.warn("No se pudo leer el estado de migración:", error);
+    return null;
+  }
+}
+
+function guardarEstadoMigracionFotos(estado) {
+  if (!estado) {
+    localStorage.removeItem(PHOTO_MIGRATION_STORAGE_KEY);
+    return;
+  }
+  localStorage.setItem(PHOTO_MIGRATION_STORAGE_KEY, JSON.stringify(estado));
+}
+
+function fotoYaEstaMigrada(foto) {
+  const original = String(foto?.storage_path || "").split("/");
+  const miniatura = storagePathDesdeUrl(foto?.url).split("/");
+  return original.includes("full") && miniatura.includes("thumbs");
+}
+
+function obtenerFotosPendientesMigracion() {
+  return piezas
+    .flatMap((pieza) => (pieza.fotos || []).map((foto, indice) => ({
+      piezaId: pieza.id,
+      folio: pieza.folio || pieza.pieza || pieza.id,
+      piezaNombre: pieza.pieza || "Pieza",
+      fotoNumero: indice + 1,
+      foto
+    })))
+    .filter(({ foto }) =>
+      foto?.id &&
+      foto?.storage_path &&
+      !String(foto.storage_path).includes("/_prueba_segura/") &&
+      !fotoYaEstaMigrada(foto)
+    );
+}
+
+function actualizarFotoLocalMigrada(fotoId, storagePath, url) {
+  for (const pieza of piezas) {
+    const foto = (pieza.fotos || []).find((item) => item.id === fotoId);
+    if (!foto) continue;
+    foto.storage_path = storagePath;
+    foto.url = url;
+    return true;
+  }
+  return false;
+}
+
+function baseArchivoMigrado(item) {
+  const archivo = String(item.foto.storage_path || "foto").split("/").pop() || "foto";
+  const base = archivo.replace(/\.[^.]+$/, "") || "foto";
+  const seguro = slug(base).slice(0, 58) || "foto";
+  return `${seguro}-av-${String(item.foto.id).slice(0, 8)}`;
+}
+
+function formatearFechaMigracion(valor) {
+  if (!valor) return "";
+  try {
+    return new Date(valor).toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" });
+  } catch (_) {
+    return String(valor);
+  }
+}
+
+function resumenEstadoMigracion(estado) {
+  const items = estado?.items || [];
+  return {
+    migradas: items.filter((item) => item.status === "migrada").length,
+    fallidas: items.filter((item) => item.status === "fallida" || item.status === "interrumpida").length,
+    procesando: items.filter((item) => item.status === "procesando").length,
+    ahorroBytes: items
+      .filter((item) => item.status === "migrada")
+      .reduce((total, item) => total + Math.max(0, Number(item.oldBytes || 0) - Number(item.newFullBytes || 0) - Number(item.newThumbBytes || 0)), 0)
+  };
+}
+
+function asegurarEstilosMigracionFotos() {
+  if (document.getElementById("avPhotoMigrationStyles")) return;
+  const style = document.createElement("style");
+  style.id = "avPhotoMigrationStyles";
+  style.textContent = `
+    .av-migration-overlay { position: fixed; inset: 0; z-index: 100000; padding: 18px; background: rgba(2, 7, 12, .86); display: grid; place-items: center; backdrop-filter: blur(9px); }
+    .av-migration-card { width: min(920px, 100%); max-height: min(860px, 94vh); overflow: auto; border: 1px solid rgba(255,255,255,.13); border-radius: 24px; background: #0d151e; color: #f5f7fa; box-shadow: 0 30px 90px rgba(0,0,0,.55); }
+    .av-migration-head { padding: 24px 26px 18px; border-bottom: 1px solid rgba(255,255,255,.1); }
+    .av-migration-head h2 { margin: 0 0 7px; font-size: clamp(1.35rem, 2vw, 1.8rem); }
+    .av-migration-head p { margin: 0; color: #aebdca; line-height: 1.55; }
+    .av-migration-body { padding: 22px 26px 26px; display: grid; gap: 18px; }
+    .av-migration-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+    .av-migration-stat { padding: 15px; border-radius: 16px; background: #111e29; border: 1px solid rgba(255,255,255,.08); }
+    .av-migration-stat strong { display: block; font-size: 1.35rem; color: #fff; }
+    .av-migration-stat span { display: block; margin-top: 4px; color: #9eb0bf; font-size: .84rem; }
+    .av-migration-note { padding: 15px 17px; border-radius: 16px; background: rgba(231, 174, 47, .1); border: 1px solid rgba(231, 174, 47, .35); color: #f5ddb0; line-height: 1.5; }
+    .av-migration-note.ok { background: rgba(42, 184, 116, .1); border-color: rgba(42, 184, 116, .36); color: #c7f4dd; }
+    .av-migration-note.err { background: rgba(225, 74, 74, .1); border-color: rgba(225, 74, 74, .36); color: #ffd1d1; }
+    .av-migration-progress { height: 14px; overflow: hidden; border-radius: 999px; background: #071019; border: 1px solid rgba(255,255,255,.08); }
+    .av-migration-progress > span { display: block; height: 100%; width: var(--progress, 0%); background: linear-gradient(90deg, #d9a62e, #f2cb64); transition: width .2s ease; }
+    .av-migration-list { max-height: 230px; overflow: auto; border: 1px solid rgba(255,255,255,.08); border-radius: 16px; background: #09121a; }
+    .av-migration-row { padding: 10px 13px; display: grid; grid-template-columns: 1fr auto; gap: 12px; border-bottom: 1px solid rgba(255,255,255,.06); font-size: .88rem; }
+    .av-migration-row:last-child { border-bottom: 0; }
+    .av-migration-row small { color: #96a8b7; }
+    .av-migration-row b { color: #f1c55a; font-weight: 700; }
+    .av-migration-row b.ok { color: #61d99c; }
+    .av-migration-row b.err { color: #ff8b8b; }
+    .av-migration-actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; }
+    .av-migration-actions button { border: 1px solid rgba(255,255,255,.14); border-radius: 12px; padding: 11px 15px; font: inherit; font-weight: 800; cursor: pointer; color: #f6f8fa; background: #172532; }
+    .av-migration-actions button.primary { color: #171208; background: #e2ae32; border-color: #e2ae32; }
+    .av-migration-actions button.success { color: #07150e; background: #4dd28d; border-color: #4dd28d; }
+    .av-migration-actions button.danger { color: #fff; background: #a93232; border-color: #c14b4b; }
+    .av-migration-actions button:disabled { opacity: .45; cursor: not-allowed; }
+    @media (max-width: 720px) { .av-migration-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .av-migration-card { border-radius: 18px; } .av-migration-head, .av-migration-body { padding-left: 17px; padding-right: 17px; } }
+  `;
+  document.head.appendChild(style);
+}
+
+function cerrarPanelMigracionFotos() {
+  if (photoMigrationRunning) return;
+  photoMigrationOverlay?.remove();
+  photoMigrationOverlay = null;
+}
+
+function renderPanelMigracionFotos() {
+  if (!photoMigrationOverlay) return;
+  const pendientes = obtenerFotosPendientesMigracion();
+  const totalFotos = piezas.reduce((total, pieza) => total + (pieza.fotos || []).filter((foto) => foto?.id && foto?.storage_path).length, 0);
+  const optimizadas = Math.max(0, totalFotos - pendientes.length);
+  const estado = leerEstadoMigracionFotos();
+  const resumen = resumenEstadoMigracion(estado);
+  const totalLote = estado?.items?.length || 0;
+  const terminadas = resumen.migradas + resumen.fallidas;
+  const porcentaje = totalLote ? Math.round((terminadas / totalLote) * 100) : 0;
+
+  let notaClase = "";
+  let nota = `La migración crea primero las versiones ligeras y cambia la base de datos. Las originales permanecen intactas hasta que tú pulses “Finalizar lote”. Cada lote procesa hasta ${PHOTO_MIGRATION_BATCH_SIZE} fotos.`;
+  if (estado?.status === "processing") {
+    nota = `Procesando el lote. No cierres esta pestaña ni apagues la computadora. Avance: ${terminadas} de ${totalLote}.`;
+  } else if (estado?.status === "review") {
+    notaClase = resumen.fallidas ? "err" : "ok";
+    nota = `Lote listo para revisión: ${resumen.migradas} migrada(s), ${resumen.fallidas} con error. Las fotos originales siguen guardadas. Revisa el catálogo y después finaliza o revierte.`;
+  } else if (estado?.status === "failed") {
+    notaClase = "err";
+    nota = "El lote no pudo terminar. Ninguna original se eliminó. Puedes revertir las migradas o cerrar y volver a intentarlo después.";
+  }
+
+  const filas = estado?.items?.length
+    ? estado.items.slice(-120).map((item) => {
+        const clase = item.status === "migrada" ? "ok" : (item.status === "fallida" || item.status === "interrumpida" ? "err" : "");
+        const texto = item.status === "migrada"
+          ? `${formatearPesoArchivo(item.oldBytes)} → ${formatearPesoArchivo(Number(item.newFullBytes || 0) + Number(item.newThumbBytes || 0))}`
+          : (item.error || "Procesando...");
+        return `<div class="av-migration-row"><span><strong>${escapeHtml(item.folio || item.piezaId)}</strong> <small>foto ${Number(item.fotoNumero || 1)}</small></span><b class="${clase}">${escapeHtml(texto)}</b></div>`;
+      }).join("")
+    : `<div class="av-migration-row"><span>No hay un lote activo.</span><small>Las fotos se procesarán en orden.</small></div>`;
+
+  photoMigrationOverlay.innerHTML = `
+    <section class="av-migration-card" role="dialog" aria-modal="true" aria-label="Migración segura de fotografías">
+      <div class="av-migration-head">
+        <h2>Migración segura de fotografías</h2>
+        <p>Reduce el almacenamiento sin tocar ventas, folios, familias ni datos de las piezas.</p>
+      </div>
+      <div class="av-migration-body">
+        <div class="av-migration-stats">
+          <div class="av-migration-stat"><strong>${totalFotos}</strong><span>Fotos registradas</span></div>
+          <div class="av-migration-stat"><strong>${pendientes.length}</strong><span>Pendientes</span></div>
+          <div class="av-migration-stat"><strong>${optimizadas}</strong><span>Ya ligeras</span></div>
+          <div class="av-migration-stat"><strong>${formatearPesoArchivo(resumen.ahorroBytes)}</strong><span>Ahorro del lote</span></div>
+        </div>
+        <div class="av-migration-note ${notaClase}">${escapeHtml(nota)}</div>
+        ${estado ? `<div class="av-migration-progress" style="--progress:${porcentaje}%"><span></span></div>` : ""}
+        ${estado?.createdAt ? `<small style="color:#91a4b4">Lote iniciado: ${escapeHtml(formatearFechaMigracion(estado.createdAt))}</small>` : ""}
+        <div class="av-migration-list">${filas}</div>
+        <div class="av-migration-actions">
+          <button type="button" data-migration-close ${photoMigrationRunning ? "disabled" : ""}>Cerrar</button>
+          ${!estado ? `<button type="button" class="primary" data-migration-start ${!pendientes.length || photoMigrationRunning ? "disabled" : ""}>Migrar siguiente lote (${Math.min(PHOTO_MIGRATION_BATCH_SIZE, pendientes.length)})</button>` : ""}
+          ${estado && estado.status !== "processing" ? `<button type="button" class="danger" data-migration-rollback ${!resumen.migradas || photoMigrationRunning ? "disabled" : ""}>Revertir lote</button>` : ""}
+          ${estado && estado.status !== "processing" ? `<button type="button" class="success" data-migration-finalize ${!resumen.migradas || photoMigrationRunning ? "disabled" : ""}>Finalizar y borrar originales</button>` : ""}
+        </div>
+      </div>
+    </section>
+  `;
+
+  photoMigrationOverlay.querySelector("[data-migration-close]")?.addEventListener("click", cerrarPanelMigracionFotos);
+  photoMigrationOverlay.querySelector("[data-migration-start]")?.addEventListener("click", migrarSiguienteLoteSeguro);
+  photoMigrationOverlay.querySelector("[data-migration-rollback]")?.addEventListener("click", revertirLoteMigracionFotos);
+  photoMigrationOverlay.querySelector("[data-migration-finalize]")?.addEventListener("click", finalizarLoteMigracionFotos);
+}
+
+async function recuperarMigracionInterrumpida(estado) {
+  if (!estado || estado.status !== "processing" || photoMigrationRunning) return estado;
+
+  for (const item of estado.items || []) {
+    if (item.status !== "procesando") continue;
+    try {
+      const { data, error } = await avDB
+        .from("fotos")
+        .select("id, url, storage_path")
+        .eq("id", item.fotoId)
+        .maybeSingle();
+      if (error) throw error;
+      if (data?.storage_path === item.newFullPath) {
+        item.status = "migrada";
+        item.newThumbUrl = data.url;
+      } else {
+        item.status = "interrumpida";
+        item.error = "La pestaña se cerró antes de actualizar esta foto.";
+        const temporales = [item.newFullPath, item.newThumbPath].filter(Boolean);
+        if (temporales.length) await avDB.storage.from(bucket).remove(temporales).catch(() => {});
+      }
+    } catch (error) {
+      item.status = "interrumpida";
+      item.error = error?.message || String(error);
+    }
+  }
+
+  const resumen = resumenEstadoMigracion(estado);
+  estado.status = resumen.migradas ? "review" : "failed";
+  guardarEstadoMigracionFotos(estado);
+  return estado;
+}
+
+async function abrirPanelMigracionFotos() {
+  if (!esAdminActual()) {
+    setStatus("tableStatus", "Solo un administrador puede migrar las fotografías.", "err");
+    return;
+  }
+
+  asegurarEstilosMigracionFotos();
+  if (!photoMigrationOverlay) {
+    photoMigrationOverlay = document.createElement("div");
+    photoMigrationOverlay.className = "av-migration-overlay";
+    document.body.appendChild(photoMigrationOverlay);
+  }
+
+  const estado = leerEstadoMigracionFotos();
+  if (estado?.status === "processing" && !photoMigrationRunning) {
+    photoMigrationOverlay.innerHTML = `<section class="av-migration-card"><div class="av-migration-body"><div class="av-migration-note">Revisando un lote que quedó interrumpido. No se borrará ninguna original.</div></div></section>`;
+    await recuperarMigracionInterrumpida(estado);
+    await cargarPiezas();
+  }
+  renderPanelMigracionFotos();
+}
+
+async function migrarSiguienteLoteSeguro() {
+  if (photoMigrationRunning || leerEstadoMigracionFotos()) return;
+  const pendientes = obtenerFotosPendientesMigracion();
+  if (!pendientes.length) {
+    setStatus("tableStatus", "Todas las fotografías ya están en formato ligero.", "ok");
+    renderPanelMigracionFotos();
+    return;
+  }
+
+  const lote = pendientes.slice(0, PHOTO_MIGRATION_BATCH_SIZE);
+  const confirmar = confirm(
+    `Se prepararán ${lote.length} foto(s). Las originales NO se borrarán durante este paso. ` +
+    "Al terminar podrás revisar el catálogo, revertir el lote o finalizarlo. ¿Continuar?"
+  );
+  if (!confirmar) return;
+
+  photoMigrationRunning = true;
+  const estado = {
+    version: 2,
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    status: "processing",
+    createdAt: new Date().toISOString(),
+    items: []
+  };
+  guardarEstadoMigracionFotos(estado);
+  renderPanelMigracionFotos();
+
+  for (let indice = 0; indice < lote.length; indice++) {
+    const entrada = lote[indice];
+    const foto = entrada.foto;
+    const oldStoragePath = String(foto.storage_path || "").replace(/^\/+/, "");
+    const oldUrl = foto.url || urlPublicaStorageAdmin(oldStoragePath);
+    const item = {
+      fotoId: foto.id,
+      piezaId: entrada.piezaId,
+      folio: entrada.folio,
+      piezaNombre: entrada.piezaNombre,
+      fotoNumero: entrada.fotoNumero,
+      oldStoragePath,
+      oldUrl,
+      status: "procesando",
+      error: ""
+    };
+    estado.items.push(item);
+    guardarEstadoMigracionFotos(estado);
+    renderPanelMigracionFotos();
+
+    let dbActualizada = false;
+    try {
+      const { data: blobOriginal, error: downloadError } = await avDB.storage.from(bucket).download(oldStoragePath);
+      if (downloadError) throw downloadError;
+      if (!blobOriginal) throw new Error("Supabase no devolvió la fotografía original.");
+
+      item.oldBytes = blobOriginal.size;
+      const nombreOriginal = oldStoragePath.split("/").pop() || `foto-${entrada.fotoNumero}.jpg`;
+      const archivoOriginal = new File([blobOriginal], nombreOriginal, { type: blobOriginal.type || "image/jpeg" });
+      const archivoCompleto = await crearVersionImagen(archivoOriginal, {
+        maxLado: 1400,
+        calidadInicial: 0.78,
+        tamanoObjetivoKb: 380,
+        sufijo: "av-full"
+      });
+      const miniatura = await crearVersionImagen(archivoOriginal, {
+        maxLado: 480,
+        calidadInicial: 0.68,
+        tamanoObjetivoKb: 80,
+        sufijo: "av-thumb"
+      });
+
+      const base = baseArchivoMigrado(entrada);
+      item.newFullPath = `${entrada.piezaId}/full/${base}.${extensionArchivo(archivoCompleto)}`;
+      item.newThumbPath = `${entrada.piezaId}/thumbs/${base}.${extensionArchivo(miniatura)}`;
+      guardarEstadoMigracionFotos(estado);
+
+      await subirArchivoStorage(item.newFullPath, archivoCompleto, true);
+      await subirArchivoStorage(item.newThumbPath, miniatura, true);
+
+      const { data: fullVerificada, error: verifyFullError } = await avDB.storage.from(bucket).download(item.newFullPath);
+      if (verifyFullError) throw verifyFullError;
+      const { data: thumbVerificada, error: verifyThumbError } = await avDB.storage.from(bucket).download(item.newThumbPath);
+      if (verifyThumbError) throw verifyThumbError;
+      if (!fullVerificada?.size || !thumbVerificada?.size) throw new Error("La verificación devolvió un archivo vacío.");
+
+      await datosImagenBlob(fullVerificada);
+      await datosImagenBlob(thumbVerificada);
+      item.newFullBytes = fullVerificada.size;
+      item.newThumbBytes = thumbVerificada.size;
+      item.newThumbUrl = urlPublicaStorageAdmin(item.newThumbPath);
+
+      const { data: actualizada, error: updateError } = await avDB
+        .from("fotos")
+        .update({ storage_path: item.newFullPath, url: item.newThumbUrl })
+        .eq("id", item.fotoId)
+        .eq("storage_path", item.oldStoragePath)
+        .select("id, storage_path, url")
+        .maybeSingle();
+      if (updateError) throw updateError;
+      if (!actualizada || actualizada.storage_path !== item.newFullPath) {
+        throw new Error("El registro cambió durante la migración y se protegió para no sobrescribirlo.");
+      }
+
+      dbActualizada = true;
+      actualizarFotoLocalMigrada(item.fotoId, item.newFullPath, item.newThumbUrl);
+      item.status = "migrada";
+    } catch (error) {
+      item.status = "fallida";
+      item.error = error?.message || String(error);
+      console.warn(`No se pudo migrar la foto ${item.fotoId}:`, error);
+      if (!dbActualizada) {
+        const nuevos = [item.newFullPath, item.newThumbPath].filter(Boolean);
+        if (nuevos.length) await avDB.storage.from(bucket).remove(nuevos).catch(() => {});
+      }
+    }
+
+    guardarEstadoMigracionFotos(estado);
+    renderPanelMigracionFotos();
+  }
+
+  const resumen = resumenEstadoMigracion(estado);
+  estado.status = resumen.migradas ? "review" : "failed";
+  guardarEstadoMigracionFotos(estado);
+  photoMigrationRunning = false;
+  await cargarPiezas();
+  renderPanelMigracionFotos();
+  setStatus(
+    "tableStatus",
+    `Lote preparado: ${resumen.migradas} foto(s) migradas y ${resumen.fallidas} con error. Las originales siguen intactas hasta finalizar.`,
+    resumen.fallidas ? "" : "ok"
+  );
+}
+
+async function revertirLoteMigracionFotos() {
+  const estado = leerEstadoMigracionFotos();
+  if (!estado || photoMigrationRunning) return;
+  const migradas = estado.items.filter((item) => item.status === "migrada");
+  if (!migradas.length) {
+    guardarEstadoMigracionFotos(null);
+    renderPanelMigracionFotos();
+    return;
+  }
+
+  const confirmar = confirm(`Se regresarán ${migradas.length} foto(s) a sus rutas originales y se borrarán únicamente las copias ligeras de este lote. ¿Continuar?`);
+  if (!confirmar) return;
+  photoMigrationRunning = true;
+  renderPanelMigracionFotos();
+
+  let errores = 0;
+  for (const item of migradas) {
+    try {
+      const { data: restaurada, error } = await avDB
+        .from("fotos")
+        .update({ storage_path: item.oldStoragePath, url: item.oldUrl || urlPublicaStorageAdmin(item.oldStoragePath) })
+        .eq("id", item.fotoId)
+        .eq("storage_path", item.newFullPath)
+        .select("id, storage_path")
+        .maybeSingle();
+      if (error) throw error;
+      if (!restaurada || restaurada.storage_path !== item.oldStoragePath) throw new Error("No se confirmó la restauración en la base de datos.");
+      await avDB.storage.from(bucket).remove([item.newFullPath, item.newThumbPath].filter(Boolean));
+      item.status = "revertida";
+    } catch (error) {
+      errores += 1;
+      item.error = error?.message || String(error);
+      console.warn(`No se pudo revertir la foto ${item.fotoId}:`, error);
+    }
+    guardarEstadoMigracionFotos(estado);
+    renderPanelMigracionFotos();
+  }
+
+  photoMigrationRunning = false;
+  if (!errores) guardarEstadoMigracionFotos(null);
+  else {
+    estado.status = "review";
+    guardarEstadoMigracionFotos(estado);
+  }
+  await cargarPiezas();
+  renderPanelMigracionFotos();
+  setStatus("tableStatus", errores ? `El lote se revirtió parcialmente. Quedaron ${errores} foto(s) por revisar.` : "Lote revertido. Todas las originales volvieron a quedar activas.", errores ? "err" : "ok");
+}
+
+async function finalizarLoteMigracionFotos() {
+  const estado = leerEstadoMigracionFotos();
+  if (!estado || photoMigrationRunning) return;
+  const migradas = estado.items.filter((item) => item.status === "migrada");
+  if (!migradas.length) return;
+
+  const confirmar = confirm(
+    `Último paso: se eliminarán permanentemente las ${migradas.length} foto(s) originales de este lote. ` +
+    "Hazlo únicamente después de revisar el catálogo. Esta acción ya no se puede revertir. ¿Finalizar?"
+  );
+  if (!confirmar) return;
+
+  photoMigrationRunning = true;
+  renderPanelMigracionFotos();
+
+  try {
+    await cargarPiezas();
+    const rutasEnUso = new Set();
+    for (const pieza of piezas) {
+      for (const foto of pieza.fotos || []) {
+        if (foto?.storage_path) rutasEnUso.add(String(foto.storage_path).replace(/^\/+/, ""));
+        const rutaUrl = storagePathDesdeUrl(foto?.url);
+        if (rutaUrl) rutasEnUso.add(rutaUrl);
+      }
+    }
+
+    const candidatos = new Set();
+    for (const item of migradas) {
+      const rutasViejas = [item.oldStoragePath, storagePathDesdeUrl(item.oldUrl)].filter(Boolean);
+      for (const ruta of rutasViejas) {
+        const limpia = String(ruta).replace(/^\/+/, "");
+        if (limpia && limpia !== item.newFullPath && limpia !== item.newThumbPath && !rutasEnUso.has(limpia)) {
+          candidatos.add(limpia);
+        }
+      }
+    }
+
+    if (candidatos.size) {
+      const { error } = await avDB.storage.from(bucket).remove([...candidatos]);
+      if (error) throw error;
+    }
+
+    const ahorro = resumenEstadoMigracion(estado).ahorroBytes;
+    guardarEstadoMigracionFotos(null);
+    setStatus("tableStatus", `Lote finalizado. Se liberaron aproximadamente ${formatearPesoArchivo(ahorro)} y las fotos ligeras quedaron activas.`, "ok");
+  } catch (error) {
+    console.error("No se pudo finalizar el lote:", error);
+    estado.status = "review";
+    guardarEstadoMigracionFotos(estado);
+    setStatus("tableStatus", "No se borró el lote completo: " + (error?.message || String(error)), "err");
+  } finally {
+    photoMigrationRunning = false;
+    await cargarPiezas();
+    renderPanelMigracionFotos();
+  }
+}
+
 function resetFotosTrabajo() {
   fotosTrabajo.forEach((foto) => {
     if (foto.tipo === "nueva" && foto.url?.startsWith("blob:")) {
@@ -2815,8 +3306,7 @@ function registrarEventos() {
   $("resetBtn").addEventListener("click", () => limpiarFormulario({ preservarVehiculo: false, preservarFamilia: false }));
   $("excelInput").addEventListener("change", importarExcel);
   $("exportExcel").addEventListener("click", exportarExcel);
-  $("optimizeExistingPhotos")?.addEventListener("click", optimizarFotosExistentes);
-  $("testPhotoOptimization")?.addEventListener("click", probarCompresionSinCambiarDatos);
+  $("safePhotoMigration")?.addEventListener("click", abrirPanelMigracionFotos);
   $("exportMonthlyCut")?.addEventListener("click", exportarCorteMensual);
   $("clearTrainingSales")?.addEventListener("click", limpiarVentasCapacitacion);
   $("preview").addEventListener("click", manejarAccionPreview);
